@@ -1,0 +1,17 @@
+node_modules/
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+backups/
+
+deployment/
+test/tablet.cjs
+.env
+.env.*
+*.pem
+*.key
+*.pub
+credentials*
+
