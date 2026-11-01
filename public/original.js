@@ -634,9 +634,11 @@
   }
 
   /* ---------------- 子页头 ---------------- */
+  // 返回键只留箭头图标，不再显示文字。
+  // 第一个参数 back 保留只为兼容 8 处调用点，已经不渲染了。
   function subHead(back, title, right) {
     return '<div class="sub-head">' +
-      '<button class="sub-back" data-act="back">' + icon('left', 17) + '<span>' + esc(back) + '</span></button>' +
+      '<button class="sub-back" data-act="back" aria-label="返回">' + icon('left', 17) + '</button>' +
       '<div class="sub-title">' + esc(title) + '</div>' +
       '<div class="sub-right">' + (right || '') + '</div>' +
     '</div>';
@@ -699,8 +701,8 @@
     /* ---------- 状态卡（手机） ---------- */
     var statRow =
       '<div class="stat-row">' +
-        '<div class="stat-card me">' +
-          '<div><div class="stat-k">在一起</div>' +
+        '<div class="stat-card me" data-act="edit-since" style="cursor:pointer" title="点这里改在一起的日子">' +
+          '<div><div class="stat-k">在一起 <span style="opacity:.55">· 可改</span></div>' +
           '<div class="stat-v">' + together + '<em>天</em></div></div>' +
           '<span class="stat-ico">' + UI.icon('heart', 18) + '</span>' +
         '</div>' +
@@ -802,7 +804,7 @@
 
     var deskTop = '<div class="desk-top desk-only">' +
       '<span class="dt-date"><b>' + D.md(t) + '</b>' + D.wd(t) + '</span>' +
-      '<span class="dt-pill">' + UI.icon('heart', 13) + '在一起 ' + together + ' 天</span>' +
+      '<span class="dt-pill" data-act="edit-since" style="cursor:pointer" title="点这里改在一起的日子">' + UI.icon('heart', 13) + '在一起 ' + together + ' 天</span>' +
       '<span class="dt-pill blue">' + UI.icon('calendar', 13) +
         '下次见面 ' + (cd == null ? '还没定' : cd + ' 天') + '</span>' +
       '<span class="dt-spacer"></span>' +
@@ -1366,8 +1368,8 @@
           '</select></div>' +
 
         '<div class="field"><div class="field-k">谁可以看到</div><select id="f-visibility" class="textarea" style="min-height:0;padding:12px 14px">' +
-          '<option value="private"' + (f.visibility!=='shared'?' selected':'') + '>仅自己</option>' +
-          '<option value="shared"' + (f.visibility==='shared'?' selected':'') + '>双方可见</option></select></div>' +
+          '<option value="private"' + (f.visibility==='private'?' selected':'') + '>仅自己</option>' +
+          '<option value="shared"' + (f.visibility!=='private'?' selected':'') + '>双方可见</option></select></div>' +
 
         '<div class="field">' +
           '<div class="field-k">备注<i>选填</i></div>' +
@@ -1972,6 +1974,28 @@
     '</div>';
   };
 
+  /* ---------------- 在一起起始日 弹层 ---------------- */
+  Pages.sinceSheet = function () {
+    var cur = S.db.couple.since || D.today();
+    return '<div class="sheet-mask" data-act="close-sheet">' +
+      '<div class="sheet" data-sheet="1">' +
+        '<div class="sheet-grip"></div>' +
+        '<div class="sheet-head">' +
+          '<div class="sheet-title">我们在一起的日子</div>' +
+          '<button class="sheet-x" data-act="close-sheet">' + UI.icon('x', 18) + '</button>' +
+        '</div>' +
+        '<div class="chip-hint" style="margin:-10px 0 16px">' +
+          '改完之后「在一起 N 天」按这一天重算。两个人看到的是同一个日期。</div>' +
+        '<div class="field">' +
+          '<div class="field-k">哪一天</div>' +
+          '<input type="date" class="textarea" id="f-since" style="min-height:0;padding:12px 14px" value="' + esc(cur) + '" max="' + D.today() + '">' +
+        '</div>' +
+        '<button class="btn-primary" style="margin-top:16px" data-act="save-since">保存</button>' +
+        '<div class="foot-line">忘了具体哪天也没关系，估一个大概就行。</div>' +
+      '</div>' +
+    '</div>';
+  };
+
   global.Pages = Pages;
 })(window);
 
@@ -2372,7 +2396,7 @@
           note: f.note || '',
           happy: f.happy || null,
           goalId: f.goalId || null,
-          visibility: f.visibility || 'private'
+          visibility: f.visibility || 'shared'
         };
         if (f.editId) {
           S.updateEntry(f.editId, patch);
@@ -2503,6 +2527,26 @@
         state.reviewMonth = yyyy + '-' + D.pad(mIdx + 1);
         state.calPicker = false;
         render();
+        break;
+      }
+
+      /* 在一起起始日 */
+      case 'edit-since':
+        state.sheet = 'since';
+        sheetRoot.innerHTML = Pages.sinceSheet(state);
+        document.body.style.overflow = 'hidden';
+        break;
+
+      case 'save-since': {
+        var sinceEl = document.getElementById('f-since');
+        var sinceVal = sinceEl ? sinceEl.value : '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(sinceVal)) { toast('选一个日期吧。'); break; }
+        if (sinceVal > D.today()) { toast('还没到的日子不能当起始日。'); break; }
+        S.db.couple.since = sinceVal;
+        S.save();
+        closeSheet();
+        render();
+        toast('改好了。在一起 ' + S.daysTogether() + ' 天。');
         break;
       }
 
