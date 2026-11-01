@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="cn.yidiangames.women.tests">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="33" />
+    <application android:label="Reminder test" />
+    <instrumentation android:name=".ReminderInstrumentation" android:targetPackage="cn.yidiangames.women" />
+</manifest>

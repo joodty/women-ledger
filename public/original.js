@@ -101,8 +101,8 @@
     return {
       version: VERSION,
       members: [
-        { id: 'me',  name: '小满', role: '她', side: 'pink', avatar: null },
-        { id: 'him', name: '阿辰', role: '他', side: 'blue', avatar: null }
+        { id: 'me',  name: global.WomenSync.account || '我', role: '她', side: 'pink', avatar: null },
+        { id: 'him', name: '待加入', role: '他', side: 'blue', avatar: null }
       ],
       couple: {
         code: 'WMS-' + (1000 + Math.floor(Math.random() * 9000)),
@@ -138,6 +138,10 @@
   function save(db) { global.WomenSync.save(db); }
   var DB = load() || seed();
   if (!load()) save(DB);
+  else if (global.WomenSync.account && DB.members.some(function(m){return m.id==='me' && m.name==='待加入';})) {
+    DB.members.filter(function(m){return m.id==='me';})[0].name=global.WomenSync.account;
+    save(DB);
+  }
 
   /* ---------------- 查询与写入 ---------------- */
   var store = {
@@ -176,12 +180,20 @@
         return e.memberId === memberId;
       });
     },
+    goalProgress: function (goal) {
+      var today = D.today();
+      var start = D.shift(today, -((D.parse(today).getDay() + 6) % 7));
+      var end = D.shift(start, 6);
+      return DB.entries.filter(function (e) {
+        return e.memberId === goal.memberId && e.goalId === goal.id && e.date >= start && e.date <= end;
+      }).length;
+    },
     unfinishedCount: function (memberId, dateKey) {
       return store.entriesOf(memberId, dateKey).filter(function (e) { return !e.categoryId; }).length;
     },
 
     addEntry: function (o) {
-      o.id = 'e' + Date.now();
+      o.id = 'e' + crypto.randomUUID();
       o.minutes = D.minutes(o.start, o.end);
       DB.entries.push(o);
       save(DB);
@@ -289,14 +301,8 @@
     addStory: function (memberId, text) {
       var seq = DB.story_entries.length + 1;
       DB.story_entries.push({
-        id: 's' + Date.now(), memberId: memberId, seq: seq,
+        id: 's' + crypto.randomUUID(), memberId: memberId, seq: seq,
         date: D.today(), text: text
-      });
-      ['me', 'him'].forEach(function (m) {
-        DB.points_ledger.push({
-          id: 'p' + m + Date.now(), memberId: m, type: 'joint',
-          points: 5, label: '待定', note: '一起完成接龙', date: D.today()
-        });
       });
       save(DB);
     },
@@ -718,8 +724,8 @@
     /* ---------- 双人 tab（手机） ---------- */
     var pairTabs =
       '<div class="pair-tabs">' +
-        '<button class="pair-tab' + (st.todaySide === 'me' ? ' on' : '') + '" data-act="side" data-side="me">我的一天</button>' +
-        '<button class="pair-tab him' + (st.todaySide === 'him' ? ' on him' : '') + '" data-act="side" data-side="him">他的今天</button>' +
+        '<button class="pair-tab' + (st.todaySide === 'me' ? ' on' : '') + '" data-act="side" data-side="me">' + esc(me.name) + '的空间</button>' +
+        '<button class="pair-tab him' + (st.todaySide === 'him' ? ' on him' : '') + '" data-act="side" data-side="him">' + esc(him.name) + '的空间</button>' +
       '</div>';
 
     /* ---------- 单人记录卡（手机） ---------- */
@@ -733,7 +739,6 @@
             UI.avatar(m, 26, 'who') +
             '<span>' + esc(m.name) + ' · ' + (side === 'me' ? '我的记录' : '他的记录') + '</span>' +
           '</span>' +
-          (side === 'me' ? '<button class="top-add" data-act="add">' + UI.icon('plus', 14) + '记一笔</button>' : '') +
         '</div>' +
         UI.entriesBlock(side, t, { arrow: true, editable: side === 'me' }) +
       '</div>';
@@ -831,12 +836,15 @@
           '<div class="brand">我们</div>' +
           '<div class="topline-date"><span>' + D.md(t) + ' ' + D.wd(t) + '</span>' +
             UI.icon('calendar', 17) + '</div>' +
+          '<button class="top-add" data-act="go" data-go="settings" aria-label="设置">' + UI.icon('gear', 18) + '</button>' +
         '</div>' +
         '<div class="page-head">' +
           '<h1 class="page-title">今天，过得怎么样？</h1>' +
           '<p class="page-sub">记一两行就好。</p>' +
         '</div>' +
-        statRow + parallelBtn + pairTabs +
+        statRow + pairTabs +
+        (st.todaySide === 'me' ? '<div class="card"><div class="card-title">本周目标<button class="card-link" data-act="go" data-go="goals">管理' + UI.icon('right', 12) + '</button></div>' +
+          (S.db.goals.filter(function(g){return g.memberId==='me' && g.status==='active';}).map(function(g){return '<button class="prog-row" data-act="go" data-go="goals"><span class="prog-main">'+esc(g.name)+'</span><span>'+S.goalProgress(g)+' / '+g.timesPerWeek+'</span></button>';}).join('') || '<button class="add-block" data-act="goal-add">添加长期目标</button>') + '</div>' : '') +
         (st.todaySide === 'him' && !shareOpen
           ? '<div class="card"><div class="empty">他没有开放这一天的记录。<br>不追问，也不解释。</div></div>'
           : whoCard(st.todaySide)) +
@@ -861,17 +869,17 @@
       '<div class="pool">' +
         '<div class="pool-cell me">' +
           '<div class="pool-ico">' + UI.icon('heart', 18) + '</div>' +
-          '<div class="pool-k">我的积分</div><div class="pool-v">待定</div></div>' +
+          '<div class="pool-k">我的积分</div><div class="pool-v">' + S.pointsOf('me') + '</div></div>' +
         '<div class="pool-cell sum">' +
           '<div class="pool-ico">' + UI.icon('coins', 18) + '</div>' +
-          '<div class="pool-k">合计可用</div><div class="pool-v">待定</div></div>' +
+          '<div class="pool-k">合计可用</div><div class="pool-v">' + (S.pointsOf('me')+S.pointsOf('him')) + '</div></div>' +
         '<div class="pool-cell him">' +
           '<div class="pool-ico">' + UI.icon('users', 18) + '</div>' +
-          '<div class="pool-k">他的积分</div><div class="pool-v">待定</div></div>' +
+          '<div class="pool-k">对方积分</div><div class="pool-v">' + S.pointsOf('him') + '</div></div>' +
       '</div>' +
       '<button class="pool-src" data-act="toggle-ledger">' +
         '<span>来源明细</span>' +
-        '<span style="margin-left:auto;color:var(--ink-3)">自己做的 <b>待定</b> 分 · 一起做的 <b>待定</b> 分</span>' +
+        '<span style="margin-left:auto;color:var(--ink-3)">自己做的 <b>' + src.own + '</b> 分 · 一起做的 <b>' + src.joint + '</b> 分</span>' +
         '<span class="go">' + UI.icon('right', 14) + '</span>' +
       '</button>';
 
@@ -895,16 +903,16 @@
       var c = S.cat(g.categoryId);
       var dots = '';
       for (var i = 0; i < g.timesPerWeek; i++) {
-        dots += '<span class="dot-s' + (i < g.doneThisWeek ? ' on' : '') +
+        dots += '<span class="dot-s' + (i < S.goalProgress(g) ? ' on' : '') +
           '" style="color:' + c.color + '"></span>';
       }
       return '<button class="prog-row" data-act="go" data-go="goals">' +
         '<span class="prog-ico" style="background:' + UI.rgba(c.color, .18) + ';color:' + UI.shade(c.color) + '">' +
           UI.icon(g.icon, 18) + '</span>' +
         '<span class="prog-main"><span class="prog-name">' + esc(g.name) + '</span>' +
-          '<span class="prog-dots">' + dots +
-            '<span class="txt">' + g.doneThisWeek + '/' + g.timesPerWeek +
-            ' · 累计' + g.totalWeeks + '周</span></span></span>' +
+        '<span class="prog-dots">' + dots +
+            '<span class="txt">' + S.goalProgress(g) + '/' + g.timesPerWeek +
+            ' · 本周</span></span></span>' +
         '<span class="list-arrow">' + UI.icon('right', 16) + '</span>' +
       '</button>';
     }).join('');
@@ -945,8 +953,9 @@
             UI.icon(w.icon || 'star', 19) + '</span>' +
           '<span class="wish-main"><span class="wish-name">' + esc(w.name) + '</span>' +
             '<span class="wish-meta">' + esc(w.executorLabel) + ' · ' + esc(w.pointsLabel) + '分</span></span>' +
-          '<button class="wish-btn ' + (w.status === 'ready' ? '' : 'saving') + '" data-act="redeem" data-id="' + w.id + '">' +
-            (w.status === 'ready' ? '去兑换' : w.status === 'done' ? '已完成' : '慢慢攒') + '</button>' +
+          ((/^[1-9]\d*$/.test(String(w.pointsLabel||'')) || w.status==='redeemed' || w.status==='done') ? '<button class="wish-btn saving" data-act="redeem" data-id="' + w.id + '">' +
+            (w.status === 'redeemed' ? '已兑换' : w.status === 'done' ? '已完成' : '去兑换') + '</button>' : '') +
+          (w.status !== 'done' ? '<button class="wish-btn saving" data-act="wish-done" data-id="' + w.id + '">完成</button>' : '') +
         '</div>';
       }).join('') : '<div class="empty">这一类还没有愿望。</div>') +
     '</div>';
@@ -972,7 +981,7 @@
     var redeem = '<div class="card">' +
       '<div class="card-title">最近一次兑换</div>' +
       (rd.length ? rd.slice(0, 3).map(function (r) {
-        return '<button class="prog-row" data-act="go" data-go="wishlist" style="border-top:0;padding:8px 0">' +
+        return '<button class="prog-row" data-act="go" data-go="' + (r.rewardId ? 'rewards' : 'wishlist') + '" style="border-top:0;padding:8px 0">' +
           '<span class="prog-ico" style="background:var(--pink-soft);color:var(--pink-deep)">' + UI.icon('gift', 17) + '</span>' +
           '<span class="prog-main"><span class="prog-name" style="font-size:13.5px">' + esc(r.name) + '</span>' +
             '<span class="prog-dots"><span class="txt">' + D.md(r.date) + '</span></span></span>' +
@@ -981,15 +990,22 @@
       }).join('') : '<div class="empty">还没有兑换过。</div>') +
     '</div>';
 
+    if (st.route === 'points') return page(
+      '<div class="page-head"><h1 class="page-title">积分</h1><p class="page-sub">完成目标打卡得分，用自己的积分兑换</p></div>' +
+      pool + '<button class="add-block" data-act="go" data-go="rewards">管理奖励清单</button>' + redeem, true);
+
+    var togetherTabs = '<div class="pair-tabs"><button class="pair-tab' + (st.togetherTab !== 'creative' ? ' on' : '') + '" data-act="together-tab" data-k="plan">共同计划</button><button class="pair-tab' + (st.togetherTab === 'creative' ? ' on' : '') + '" data-act="together-tab" data-k="creative">创意</button></div>';
     return page(
       '<div class="page-head">' +
         '<h1 class="page-title">一起</h1>' +
         '<p class="page-sub">把想做的事慢慢实现</p>' +
       '</div>' +
-      pool + progress + wish + story + redeem + DEMO,
+      togetherTabs + (st.togetherTab === 'creative' ? story : wish + '<button class="add-block" data-act="go" data-go="meet">见面安排</button>'),
       true
     );
   };
+
+  Pages.points = function(st) { return Pages.together(st); };
 
   /* ============================================================
      ④ 回看
@@ -1188,12 +1204,12 @@
 
     function memberBlock(m, tag) {
       return '<div class="member">' +
-        '<button class="member-ava-btn" data-act="pick-avatar" data-id="' + m.id + '" aria-label="换头像">' +
+        '<button class="member-ava-btn" ' + (m.id==='me' ? 'data-act="pick-avatar" data-id="me" aria-label="换头像"' : 'disabled aria-label="对方头像"') + '>' +
           UI.avatar(m, 62, 'member') +
         '</button>' +
-        '<button class="member-nm" data-act="open-edit" data-kind="member" data-id="' + m.id + '">' +
+        '<button class="member-nm" ' + (m.id==='me' ? 'data-act="open-edit" data-kind="member" data-id="me"' : 'disabled') + '>' +
           esc(m.name) + '<i>· ' + tag + '</i>' +
-          '<span class="nm-edit">' + UI.icon('edit', 12) + '</span>' +
+          (m.id==='me' ? '<span class="nm-edit">' + UI.icon('edit', 12) + '</span>' : '') +
         '</button>' +
       '</div>';
     }
@@ -1209,7 +1225,7 @@
         '</div>' +
         memberBlock(him, '他') +
       '</div>' +
-      '<div class="member-tip">点头像换照片 · 点名字改称呼</div>' +
+      '<div class="member-tip">点自己的头像换照片 · 点自己的名字改称呼</div>' +
     '</div>';
 
     var switchCard = '<div class="switch-card">' +
@@ -1223,11 +1239,7 @@
     '</div>';
 
     var entries = [
-      { go: 'palette',  ico: 'palette',  t: '分类与色板',   d: '六域 ＋ 未分类 · 拖动排序全局生效', bg: 'var(--pink-soft)',   fg: 'var(--pink-deep)' },
-      { go: 'goals',    ico: 'target',   t: '我的长期目标', d: '最多 3 个 · 记录目标进度',      bg: 'var(--blue-soft)',   fg: 'var(--blue-ink)' },
-      { go: 'rewards',  ico: 'gift',     t: '奖励清单',     d: '行为型奖励 · 写清谁执行',          bg: '#FBF3E6',            fg: '#C79A54' },
-      { go: 'wishlist', ico: 'heart',    t: '愿望清单管理', d: '一起做的／想吃的／想去的',        bg: '#F4EFFB',            fg: '#8B72C4' },
-      { go: 'meet',     ico: 'calendar', t: '见面安排',     d: '倒计时与曾经见面的日子',           bg: '#EAF5EE',            fg: '#5F8F58' }
+      { go: 'palette',  ico: 'palette',  t: '分类与色板',   d: '六域 ＋ 未分类 · 拖动排序全局生效', bg: 'var(--pink-soft)',   fg: 'var(--pink-deep)' }
     ];
 
     var listHtml = '<div class="list-group">' + entries.map(function (x) {
@@ -1259,7 +1271,7 @@
         '<h1 class="page-title">设置</h1>' +
         '<p class="page-sub">把我们的空间调整成舒服的样子</p>' +
       '</div>' +
-      memberCard + '<div class="card" style="padding:14px;margin-bottom:16px">这个空间的记录对两位成员可见，请共同商量后记录。</div>' + listHtml + backup +
+      memberCard + '<div class="card" style="padding:14px;margin-bottom:16px">记录和目标可选择仅自己或双方可见；愿望等共同内容双方可见。旧记录默认双方可见。</div>' + listHtml + backup +
       '<div class="page-foot">没有连续打卡，也没有扣分。</div>' +
       DEMO,
       true
@@ -1296,7 +1308,7 @@
     var end = f.end || '17:00';
     var guess = guessByTime(D.hm(start));
     var pick = f.categoryId;
-    if (pick === undefined) pick = guess;
+    if (pick === undefined) pick = null;
 
     var mins = D.minutes(start, end);
     var cats = S.db.categories.filter(function (c) { return c.id !== 'none'; });
@@ -1344,8 +1356,18 @@
         '<div class="field">' +
           '<div class="field-k">分类<i>选填</i></div>' +
           '<div class="chips" id="f-chips">' + chips + '</div>' +
-          '<div class="chip-hint">已按时段预选「' + esc(S.cat(guess).name) + '」，也可以跳过</div>' +
+          '<div class="chip-hint">可以不选分类，先记下来。</div>' +
         '</div>' +
+
+        '<div class="field"><div class="field-k">计入目标<i>选填</i></div>' +
+          '<select id="f-goal" class="textarea" style="min-height:0;padding:12px 14px">' +
+            '<option value="">不计入目标</option>' +
+            S.db.goals.filter(function(g){return g.memberId==='me' && (g.status==='active' || g.id===f.goalId);}).map(function(g){return '<option value="'+esc(g.id)+'"'+(f.goalId===g.id?' selected':'')+'>'+esc(g.name)+'</option>';}).join('') +
+          '</select></div>' +
+
+        '<div class="field"><div class="field-k">谁可以看到</div><select id="f-visibility" class="textarea" style="min-height:0;padding:12px 14px">' +
+          '<option value="private"' + (f.visibility!=='shared'?' selected':'') + '>仅自己</option>' +
+          '<option value="shared"' + (f.visibility==='shared'?' selected':'') + '>双方可见</option></select></div>' +
 
         '<div class="field">' +
           '<div class="field-k">备注<i>选填</i></div>' +
@@ -1406,12 +1428,12 @@
           '<span class="kw" style="background:' + UI.rgba(c.color, .2) + ';color:' + UI.shade(c.color) + '">' +
             c.name + '</span></span></div>' +
         '<div class="kv"><span class="kv-k">每周次数</span><span class="kv-v">每周 ' + g.timesPerWeek + ' 次</span></div>' +
-        '<div class="kv"><span class="kv-k">达标奖励</span><span class="kv-v">' + esc(g.pointsLabel) + '分</span></div>' +
-        '<div class="kv"><span class="kv-k">关键词</span><span class="kv-v"><span class="kw-list">' + kws + '</span></span></div>' +
+        '<div class="kv"><span class="kv-k">每次打卡</span><span class="kv-v">' + (g.pointsPerCheckin || 0) + ' 分</span></div>' +
+        (g.reminderTime ? '<div class="kv"><span class="kv-k">每日提醒</span><span class="kv-v">' + esc(g.reminderTime) + '</span></div>' : '') +
         '<div class="goal-foot">' +
-          '<span class="goal-stat">累计达标 <b>' + g.totalWeeks + '</b> 周 · 进行中</span>' +
+          '<span class="goal-stat">本周 ' + S.goalProgress(g) + '/' + g.timesPerWeek + ' · 进行中</span>' +
           '<span class="goal-btns">' +
-            '<button class="btn-mini" data-act="goal-done" data-id="' + g.id + '">' + UI.icon('check', 13) + '完成</button>' +
+            '<button class="btn-mini" data-act="goal-done" data-id="' + g.id + '">' + UI.icon('check', 13) + '结束目标</button>' +
             '<button class="btn-mini ghost" data-act="goal-drop" data-id="' + g.id + '">' + UI.icon('trash', 13) + '放弃</button>' +
           '</span>' +
         '</div>' +
@@ -1422,7 +1444,7 @@
       var c = S.cat(g.categoryId);
       var dots = '';
       for (var i = 0; i < g.timesPerWeek; i++) {
-        dots += '<span class="dot-s' + (i < g.doneThisWeek ? ' on' : '') +
+        dots += '<span class="dot-s' + (i < S.goalProgress(g) ? ' on' : '') +
           '" style="color:' + c.color + '"></span>';
       }
       return '<div class="prog-row">' +
@@ -1430,14 +1452,14 @@
           UI.icon(g.icon, 18) + '</span>' +
         '<span class="prog-main"><span class="prog-name">' + esc(g.name) + '</span></span>' +
         '<span class="prog-dots">' + dots +
-          '<span class="txt">' + g.doneThisWeek + '/' + g.timesPerWeek + '</span></span>' +
+          '<span class="txt">' + S.goalProgress(g) + '/' + g.timesPerWeek + '</span></span>' +
       '</div>';
     }).join('');
 
     var settle = S.db.weekly_settlements[0];
 
     return sub(
-      UI.subHead('设置', '我的长期目标', active.length + '/3') +
+      UI.subHead('今天', '我的长期目标', active.length + '/3') +
       '<div class="sub-lead">最多 3 个 · 记录目标进度</div>' +
       cards +
       (active.length < 3
@@ -1506,22 +1528,18 @@
           '<span style="font-family:var(--serif);font-size:20px;font-weight:600;color:var(--pink-deep)">' +
             w.pointsLabel + '分</span></div>' +
         '<div class="pool">' +
-          '<div class="pool-cell me"><div class="pool-k">我的可用积分</div><div class="pool-v">待定</div></div>' +
-          '<div class="pool-cell him"><div class="pool-k">他的可用积分</div><div class="pool-v">待定</div></div>' +
-          '<div class="pool-cell sum"><div class="pool-k">合计可用</div><div class="pool-v">待定</div></div>' +
+          '<div class="pool-cell me"><div class="pool-k">我的可用积分</div><div class="pool-v">' + S.pointsOf('me') + '</div></div>' +
+          '<div class="pool-cell him"><div class="pool-k">对方可用积分</div><div class="pool-v">' + S.pointsOf('him') + '</div></div>' +
+          '<div class="pool-cell sum"><div class="pool-k">合计可用</div><div class="pool-v">' + (S.pointsOf('me') + S.pointsOf('him')) + '</div></div>' +
         '</div>' +
       '</div>' +
 
       '<div class="card">' +
-        '<div class="card-title">本次积分消耗<span class="sub">共同愿望按双方可用积分分担</span></div>' +
+        '<div class="card-title">本次积分消耗<span class="sub">由兑换者支付</span></div>' +
         '<div class="pay-row me">' +
           '<span class="ava">' + UI.icon('heart', 13) + '</span>' +
           '<span>从我的积分扣除</span><span class="v">' + esc(w.pointsLabel) + '分</span></div>' +
-        '<div class="pay-row him">' +
-          '<span class="ava">' + UI.icon('users', 13) + '</span>' +
-          '<span>从他的积分扣除</span><span class="v">' + esc(w.pointsLabel) + '分</span></div>' +
-        '<div class="chip-hint" style="margin-top:10px">' +
-          '🔴 实际扣多少以确认结果为准：兑换时会写明“从你的 X 分里扣 N 分，他的 X 分里扣 N 分”。</div>' +
+        '<div class="chip-hint" style="margin-top:10px">确认兑换后从自己的积分中扣除。</div>' +
       '</div>' +
 
       '<div class="card">' +
@@ -1570,7 +1588,7 @@
 
       '<div class="point-band">' +
         '<span class="icon">' + UI.icon('star', 15) + '</span>' +
-        '<span><span class="k">完成一次接龙，我们各得 待定分</span>' +
+        '<span><span class="k">一起把故事慢慢写下去</span>' +
         '<span class="d">不需要每天写，想到了再继续</span></span>' +
       '</div>' +
 
@@ -1608,6 +1626,7 @@
               ';color:' + UI.shade(t.k === 'mid' ? '#A7C7EC' : '#F2A6AC') + '">' + UI.icon(ic, 16) + '</span>' +
             '<span class="rm">' + esc(r.name) + '</span>' +
             '<span class="rp">' + esc(r.pointsLabel) + '分 · ' + esc(r.executorLabel) + '</span>' +
+            '<button class="wish-btn" data-act="redeem-reward" data-id="' + r.id + '">兑换</button>' +
             '<button class="re" data-act="open-edit" data-kind="reward" data-id="' + r.id + '">' +
               UI.icon('edit', 15) + '</button>' +
           '</div>';
@@ -1616,7 +1635,7 @@
     }).join('');
 
     return sub(
-      UI.subHead('设置', '奖励清单', '') +
+      UI.subHead('积分', '奖励清单', '') +
       '<div class="tip-band" style="justify-content:center">' + UI.icon('star', 14) +
         '先写谁来执行，再设置需要多少分</div>' +
       groups +
@@ -1794,7 +1813,7 @@
             '<button class="wi-edit" data-act="open-edit" data-kind="wish" data-id="' + w.id + '">' +
               UI.icon('edit', 15) + '</button>' +
             '<button class="wi-btn ' + (w.status === 'ready' ? 'ready' : 'saving') + '" data-act="redeem" data-id="' + w.id + '">' +
-              (w.status === 'ready' ? '去兑换' : '慢慢攒') + UI.icon('right', 12) + '</button>' +
+              (w.status === 'redeemed' ? '已兑换' : w.status === 'done' ? '已完成' : '去兑换') + UI.icon('right', 12) + '</button>' +
           '</div>';
         }).join('') : '<div class="empty">这一组还没有愿望。</div>') +
       '</div>';
@@ -1859,11 +1878,10 @@
       body =
         field('名称', input('e-name', r.name || '', '比如：规律运动')) +
         field('归属分类', chipsCat(r.categoryId)) +
-        field('每周次数', chipsNum(r.timesPerWeek)) +
-        field('达标分值', input('e-points', r.pointsLabel || '待定', '待定'),
-          '具体分值都是占位符「待定」，等你们一起定。') +
-        field('关键词', input('e-keywords', (r.keywords || []).join(' '), '运动 跑步 散步 遛娃'),
-          '留空＝该分类下所有记录都算达成。用空格分隔。');
+        field('每周次数', chipsNum(r.timesPerWeek), '记一笔时选择这个目标，就会计入本周进度。') +
+        field('每次打卡得分', input('e-goal-points', String(r.pointsPerCheckin || 0), '例如 5'), '自己设定，0 分表示只记录进度。') +
+        field('每日提醒（选填）', '<input class="input-box" type="time" id="e-reminder-time" value="' + esc(r.reminderTime || '') + '">', '设置后，登录新版安卓 App 并允许通知，手机每天会提醒；留空关闭。') +
+        field('谁可以看到', chipsPick('visibility', r.visibility || 'shared', [['private','仅自己'],['shared','双方可见']]));
     } else if (kind === 'reward') {
       body =
         field('名称', input('e-name', r.name || '', '写成行为，比如：他做一顿饭，我休息')) +
@@ -1974,8 +1992,8 @@
   var tabbar = document.getElementById('tabbar');
   var sheetRoot = document.getElementById('sheet-root');
 
-  var MAIN = ['today', 'together', 'review', 'settings'];
-  var TITLES = { today: '今天', together: '一起', review: '回看', settings: '设置' };
+  var MAIN = ['today', 'together', 'points', 'review', 'settings'];
+  var TITLES = { today: '今天', together: '一起', points: '积分', review: '回看', settings: '设置' };
 
   var state = {
     route: 'today',
@@ -1988,6 +2006,7 @@
     reviewDay: D.today(),
     reviewScope: 'all',
     wishTab: 'together',
+    togetherTab: 'plan',
     lowOnly: false,
     happyDay: null,
     calPicker: false,
@@ -2041,6 +2060,7 @@
       '<nav class="side-nav">' +
         sideItem('today', 'sun', '今天', on) +
         sideItem('together', 'heart', '一起', on) +
+        sideItem('points', 'coins', '积分', on) +
         sideItem('review', 'calendar', '回看', on) +
         sideItem('settings', 'gear', '设置', on) +
       '</nav>' +
@@ -2053,8 +2073,8 @@
     tabbar.innerHTML =
       tabItem('today', 'sun', '今天', on) +
       tabItem('together', 'heart', '一起', on) +
-      tabItem('review', 'calendar', '回看', on) +
-      tabItem('settings', 'gear', '设置', on);
+      tabItem('points', 'coins', '积分', on) +
+      tabItem('review', 'calendar', '回看', on);
   }
 
   function sideItem(route, ico, label, on) {
@@ -2109,26 +2129,26 @@
   var EDIT_DEFAULTS = {
     goal: function (cat) {
       return {
-        id: 'g' + Date.now(), memberId: 'me', name: '', icon: 'target',
+        id: 'g' + crypto.randomUUID(), memberId: 'me', name: '', icon: 'target',
         categoryId: cat || 'growth', timesPerWeek: 3, points: null,
-        pointsLabel: '待定', keywords: [], doneThisWeek: 0, totalWeeks: 0, status: 'active'
+        pointsLabel: '待定', pointsPerCheckin: 0, keywords: [], doneThisWeek: 0, totalWeeks: 0, status: 'active', visibility: 'private'
       };
     },
     reward: function () {
       return {
-        id: 'r' + Date.now(), tier: 'small', name: '', points: null,
+        id: 'r' + crypto.randomUUID(), tier: 'small', name: '', points: null,
         pointsLabel: '待定', executor: 'me', executorLabel: '我执行'
       };
     },
     wish: function (cat) {
       return {
-        id: 'w' + Date.now(), cat: cat || 'together', name: '', points: null,
+        id: 'w' + crypto.randomUUID(), cat: cat || 'together', name: '', points: null,
         pointsLabel: '待定', executor: 'both', executorLabel: '我们一起',
         status: 'saving', icon: cat === 'eat' ? 'hotpot' : cat === 'go' ? 'beach' : 'art'
       };
     },
     cat: function () {
-      return { id: 'c' + Date.now(), name: '', desc: '', color: '#D6C6E8' };
+      return { id: 'c' + crypto.randomUUID(), name: '', desc: '', color: '#D6C6E8' };
     },
     member: function () {
       return { id: 'me', name: '', role: '她', side: 'pink', avatar: null };
@@ -2157,9 +2177,11 @@
     var p = document.getElementById('e-points');
     var k = document.getElementById('e-keywords');
     var d = document.getElementById('e-desc');
-    var c = document.getElementById('e-color');
+    var c = document.getElementById('e-color'), gp = document.getElementById('e-goal-points'), reminder = document.getElementById('e-reminder-time');
     if (n) e.rec.name = n.value.trim();
     if (p) e.rec.pointsLabel = p.value.trim() || '待定';
+    if (gp) e.rec.pointsPerCheckin = gp.value.trim();
+    if (reminder) e.rec.reminderTime = reminder.value;
     if (k) e.rec.keywords = k.value.split(/[\s,，、]+/).filter(Boolean);
     if (d) e.rec.desc = d.value.trim();
     if (c) e.rec.color = c.value;
@@ -2173,6 +2195,12 @@
     if (!e) return;
     var r = e.rec;
     if (!r.name) { toast('先写个名字。'); return; }
+    if (e.kind === 'goal') {
+      if (!/^(0|[1-9]\d{0,4})$/.test(String(r.pointsPerCheckin)) || Number(r.pointsPerCheckin)>10000) { toast('每次打卡得分请输入 0 到 10000 的整数。'); return; }
+      r.pointsPerCheckin=Number(r.pointsPerCheckin);
+      if (r.reminderTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.reminderTime)) { toast('请选择有效的提醒时间。'); return; }
+      if (r.reminderTime && global.WomenReminders) global.WomenReminders.requestPermission();
+    }
 
     if (r.executor) {
       r.executorLabel = r.executor === 'me'
@@ -2241,11 +2269,13 @@
   function collectForm() {
     var f = state.form || {};
     var s = document.getElementById('f-start'), e = document.getElementById('f-end');
-    var c = document.getElementById('f-content'), n = document.getElementById('f-note');
+    var c = document.getElementById('f-content'), n = document.getElementById('f-note'), goal = document.getElementById('f-goal'), visibility = document.getElementById('f-visibility');
     if (s) f.start = s.value;
     if (e) f.end = e.value;
     if (c) f.content = c.value;
     if (n) f.note = n.value;
+    if (goal) f.goalId = goal.value || null;
+    if (visibility) f.visibility = visibility.value;
     state.form = f;
     return f;
   }
@@ -2340,7 +2370,9 @@
           categoryId: f.categoryId || null,   // 留空＝未分类，允许的最终状态
           content: f.content.trim(),
           note: f.note || '',
-          happy: f.happy || null
+          happy: f.happy || null,
+          goalId: f.goalId || null,
+          visibility: f.visibility || 'private'
         };
         if (f.editId) {
           S.updateEntry(f.editId, patch);
@@ -2369,6 +2401,8 @@
           catManual: true,          // 编辑已有记录时，不再跟着时间自动改分类
           content: en0.content,
           note: en0.note || '',
+          goalId: en0.goalId || null,
+          visibility: en0.visibility || 'shared',
           happy: en0.happy || null
         };
         state.sheet = 'add';
@@ -2415,6 +2449,9 @@
         state.wishTab = el.getAttribute('data-k');
         render();
         break;
+
+      case 'together-tab':
+        state.togetherTab = el.getAttribute('data-k'); render(); break;
 
       case 'go':
         nav(el.getAttribute('data-go'), { id: id });
@@ -2519,10 +2556,11 @@
       case 'goal-drop': {
         var g = S.db.goals.filter(function (x) { return x.id === id; })[0];
         if (!g) return;
+        if (!confirm(act === 'goal-done' ? '确定结束并归档这个长期目标吗？日常打卡请在记一笔时选择该目标。' : '确定放弃并归档这个长期目标吗？')) return;
         g.status = act === 'goal-done' ? 'done' : 'dropped';
-        if (act === 'goal-done') {
+        if (act === 'goal-done' && g.visibility !== 'private') {
           S.db.milestones.push({
-            id: 'm' + Date.now(), kind: 'goal', date: D.today(),
+            id: 'm' + crypto.randomUUID(), kind: 'goal', date: D.today(),
             title: '完成长期目标「' + g.name + '」', note: ''
           });
         }
@@ -2534,19 +2572,24 @@
       case 'confirm-redeem': {
         var w = S.db.wishlist.filter(function (x) { return x.id === id; })[0];
         if (!w) return;
-        S.db.redemptions.push({
-          id: 'rd' + Date.now(), wishId: w.id, memberId: 'me', date: D.today(),
-          name: '兑换「' + w.name + '」', fromMe: 0, fromHim: 0, label: w.pointsLabel
-        });
-        w.status = 'done';
-        S.db.milestones.push({
-          id: 'm' + Date.now(), kind: 'wish', date: D.today(),
-          title: '兑换 ' + w.name, note: ''
-        });
-        S.save();
-        nav('together');
-        toast('兑换成功。真正完成后，它会留在时间线上。');
+        if (!confirm('确定用自己的 ' + w.pointsLabel + ' 分兑换「' + w.name + '」吗？')) break;
+        global.WomenSync.redeem('wish',id).then(function(){nav('points');toast('兑换成功，已扣除积分。');}).catch(function(e){toast(e.message || '兑换未完成，请重试。');});
         break;
+      }
+
+      case 'redeem-reward': {
+        var reward = S.db.rewards.filter(function (x) { return x.id === id; })[0];
+        if (!reward || !confirm('确定用自己的 ' + reward.pointsLabel + ' 分兑换「' + reward.name + '」吗？')) break;
+        global.WomenSync.redeem('reward',id).then(function(){toast('兑换成功，已扣除积分。');}).catch(function(e){toast(e.message || '兑换未完成，请重试。');});
+        break;
+      }
+
+      case 'wish-done': {
+        var wish = S.db.wishlist.filter(function(x){return x.id===id;})[0];
+        if(!wish || wish.status==='done') break;
+        if(/^[1-9]\d*$/.test(String(wish.pointsLabel||'')) && wish.status!=='redeemed'){toast('这个愿望设置了积分，请先兑换。');break;}
+        if(!confirm('确定已完成「'+wish.name+'」吗？')) break;
+        wish.status='done';S.db.milestones.push({id:'m'+crypto.randomUUID(),kind:'wish',date:D.today(),title:'完成「'+wish.name+'」',note:''});S.save();render();toast('愿望已完成。');break;
       }
 
       /* 故事接龙 */
@@ -2567,7 +2610,7 @@
         S.addStory('me', txt);
         state.storyDraft = '';
         nav('storyFull');
-        toast('这一段发出去了。我们各得 待定分。');
+        toast('这一段发出去了。');
         break;
       }
 
@@ -2599,7 +2642,7 @@
           cur.note = planVal;
         } else {
           S.db.milestones.push({
-            id: 'm' + Date.now(), kind: 'meet', date: dateVal,
+            id: 'm' + crypto.randomUUID(), kind: 'meet', date: dateVal,
             title: '在车站见面', note: planVal, plan: planVal
           });
         }
@@ -2657,6 +2700,7 @@
 
       case 'goal-archive': {
         var gg = S.db.goals.filter(function (x) { return x.id === id; })[0];
+        if (!gg || !confirm('确定结束并归档这个长期目标吗？日常打卡请在记一笔时选择该目标。')) break;
         if (gg) { gg.status = 'done'; S.save(); }
         closeSheet();
         render();
@@ -2697,19 +2741,6 @@
       var mins = D.minutes(f.start, f.end);
       var dv = document.getElementById('f-dur');
       if (dv) dv.textContent = mins ? D.dur(mins) : '—';
-      // 用户没手动选分类 → 跟着开始时间重算预选
-      if (!f.catManual) {
-        var guess = guessByTime(D.hm(f.start));
-        f.categoryId = guess;
-        var chips = document.getElementById('f-chips');
-        if (chips) {
-          Array.prototype.forEach.call(chips.children, function (b) {
-            b.classList.toggle('on', b.getAttribute('data-id') === guess);
-          });
-        }
-        var hint = document.querySelector('.chip-hint');
-        if (hint) hint.textContent = '已按时段预选「' + S.cat(guess).name + '」，也可以跳过';
-      }
       return;
     }
 
