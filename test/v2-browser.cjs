@@ -160,6 +160,19 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await a.getByRole("heading", { name: "回看", exact: true }).waitFor();
     await a.goto(base + "/#/settings");
     await a.getByRole("heading", { name: "设置", exact: true }).waitFor();
+    // A save notification must not block the next action on a small screen.
+    await a.setViewportSize({ width: 390, height: 640 });
+    await a.goto(base + "/#/");
+    await a.getByRole("button", { name: "记一笔", exact: true }).click();
+    await a.getByLabel("做了什么").fill("连续记录滚动场景".repeat(35));
+    await a.getByRole("button", { name: "保存记录", exact: true }).click();
+    await expect(a.getByRole("dialog")).toHaveCount(0);
+    await expect(a.locator(".v2-toast")).toBeVisible();
+    await a.getByRole("button", { name: "记一笔", exact: true }).click({ timeout: 1800 });
+    await expect(a.getByRole("dialog", { name: "记一笔" })).toBeVisible();
+    await a.getByRole("button", { name: "关闭", exact: true }).click();
+    await expect(a.locator(".v2-toast")).toHaveCount(0, { timeout: 5000 });
+    await a.setViewportSize({ width: 390, height: 844 });
     assert.deepEqual(errors, []);
     if (process.env.PREVIEW_SCREENSHOT) {
       await a.goto(base);

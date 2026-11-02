@@ -1,7 +1,7 @@
 {
   "name": "women-ledger",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "engines": {
     "node": ">=24"
   },
@@ -9,6 +9,7 @@
     "start": "node server.cjs",
     "setup": "node server.cjs setup",
     "test": "node test/api.cjs && node test/spaces.cjs && node test/wallet.cjs && node test/account-migration.cjs && node test/commands.cjs && node test/migration-v2.cjs && node test/v2-browser.cjs && node test/speech.cjs && node test/updater-v2.cjs",
+    "test:live-ui": "node test/live-ui.cjs",
     "dev": "vite",
     "typecheck": "vue-tsc --noEmit",
     "build": "node ops/build.mjs",

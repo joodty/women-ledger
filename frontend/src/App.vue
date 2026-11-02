@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useSpace } from "./stores/space";
 import AuthPage from "./features/AuthPage.vue";
 import Icon from "./components/Icon.vue";
@@ -17,6 +17,18 @@ const tabs = [
   ["/review", "calendar", "回看"],
 ];
 onMounted(() => s.init());
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  () => s.notice,
+  (notice) => {
+    clearTimeout(noticeTimer);
+    if (notice)
+      noticeTimer = setTimeout(() => {
+        s.notice = "";
+      }, 3000);
+  },
+);
+onBeforeUnmount(() => clearTimeout(noticeTimer));
 function discard(p: Pending) {
   if (confirm("放弃这次本机修改？服务器上的内容不会更改。"))
     task.run(() => s.resolve(p, false));
@@ -68,12 +80,7 @@ function readable(value: unknown) {
     </div>
     <main class="view">
       <RouterView />
-      <div
-        v-if="s.notice"
-        class="v2-toast"
-        role="status"
-        @click="s.notice = ''"
-      >
+      <div v-if="s.notice" class="v2-toast" role="status">
         {{ s.notice }}
       </div>
     </main>

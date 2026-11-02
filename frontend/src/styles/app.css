@@ -152,6 +152,7 @@ a {
   font-size: 28px;
 }
 .v2-toast {
+  pointer-events: none;
   position: fixed;
   bottom: 100px;
   left: 50%;
