@@ -154,12 +154,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect
       .poll(async () => (await snapshot(a)).data.couple.since)
       .toBe("2026-01-03");
-    assert.equal(
-      await a.evaluate(() =>
-        localStorage.getItem("women.pending.v1.previous-session.alice"),
-      ),
-      null,
-    );
+    await expect.poll(()=>a.evaluate(()=>localStorage.getItem("women.pending.v1.previous-session.alice"))).toBeNull();
     await a.getByRole("button", { name: "收起", exact: true }).click();
     await a.goto(base + "/#/review");
     await a.getByRole("heading", { name: "回看", exact: true }).waitFor();
