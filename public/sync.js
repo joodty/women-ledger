@@ -26,7 +26,8 @@
     const d=structuredClone(source); if(user!=='him')return d;
     for(const m of d.members||[])m.id=swapId(m.id);
     for(const key of ['entries','goals','points_ledger','story_entries','redemptions']) for(const item of d[key]||[]) if(item.memberId)item.memberId=swapId(item.memberId);
-    for(const key of ['rewards','wishlist'])for(const item of d[key]||[])if(item.executor){item.executor=swapId(item.executor);item.executorLabel=item.executor==='both'?'我们一起':item.executor==='me'?(key==='wishlist'?'我来安排':'我执行'):(key==='wishlist'?'他来安排':'他执行');}
+    for(const item of d.wishlist||[])if(item.scope)item.scope=swapId(item.scope);
+for(const key of ['rewards','wishlist'])for(const item of d[key]||[])if(item.executor){item.executor=swapId(item.executor);item.executorLabel=item.executor==='both'?'我们一起':item.executor==='me'?(key==='wishlist'?'我来安排':'我执行'):(key==='wishlist'?'他来安排':'他执行');}
     for(const item of d.redemptions||[]){const a=item.fromMe;item.fromMe=item.fromHim;item.fromHim=a;}
     return d;
   }

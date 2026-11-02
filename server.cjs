@@ -191,8 +191,10 @@ const server=http.createServer(async(req,res)=>{try{
   const now=new Date(),date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
   /* 属于「我们俩」的愿望：一人一半，且要两个人都点头 */
   const existing=body.kind==='wish'?data.redemptions.find(r=>r.status==='pending'&&r.wishId===item.id):null;
-  if(existing&&(item.scope==='me'||String(existing.label)!==String(cost)||existing.name!=='兑换「'+item.name+'」')){db.exec('ROLLBACK');return send(res,409,{error:'愿望内容已更改，请先取消旧申请再重新发起'});}
-  const shared=body.kind==='wish'&&item.scope!=='me';
+  if(existing&&(item.scope!=='both'||String(existing.label)!==String(cost)||existing.name!=='兑换「'+item.name+'」')){db.exec('ROLLBACK');return send(res,409,{error:'愿望内容已更改，请先取消旧申请再重新发起'});}
+  const shared=body.kind==='wish'&&item.scope==='both';
+  /* 单人的愿望只有本人能兑，因为分在他自己的钱包里 */
+  if(body.kind==='wish'&&item.scope!=='both'&&item.scope!==s.slot){db.exec('ROLLBACK');return send(res,400,{error:'这是对方自己的愿望，要他自己来兑'});}
   let waiting=false;
   if(shared){
    if(cost%2!==0){db.exec('ROLLBACK');return send(res,400,{error:'两个人的兑换，分值要能被 2 整除'});}

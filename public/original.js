@@ -358,7 +358,7 @@
     sun:      '<circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>',
     heart:    '<path d="M12 20.3s-7.6-4.6-7.6-9.7A4.4 4.4 0 0 1 12 7.7a4.4 4.4 0 0 1 7.6 2.9c0 5.1-7.6 9.7-7.6 9.7z"/>',
     calendar: '<rect x="3.2" y="5" width="17.6" height="16" rx="3.4"/><path d="M8 3v4M16 3v4M3.2 10.4h17.6"/>',
-    gear:     '<circle cx="12" cy="12" r="3.1"/><path d="M12 2.8v2.4M12 18.8v2.4M4.4 7.6l2.1 1.2M17.5 15.2l2.1 1.2M4.4 16.4l2.1-1.2M17.5 8.8l2.1-1.2"/>',
+    gear:     '<circle cx="12" cy="12" r="3.3"/><path d="M9.42 5.92L9.49 2.63L14.51 2.63L14.58 5.92L15.97 6.73L18.86 5.14L21.37 9.49L18.55 11.2L18.55 12.8L21.37 14.51L18.86 18.86L15.97 17.27L14.58 18.08L14.51 21.37L9.49 21.37L9.42 18.08L8.03 17.27L5.14 18.86L2.63 14.51L5.45 12.8L5.45 11.2L2.63 9.49L5.14 5.14L8.03 6.73Z"/>',
     home:     '<path d="M4 10.6 12 4l8 6.6V20a1 1 0 0 1-1 1h-4.6v-6H9.6v6H5a1 1 0 0 1-1-1z"/>',
     plus:     '<path d="M12 5.4v13.2M5.4 12h13.2"/>',
     right:    '<path d="M9.5 5.5 16 12l-6.5 6.5"/>',
@@ -876,12 +876,12 @@
   function wishRank(w) {
     var cost = wishCost(w);
     if (cost > 10000) return 1e7;
-    if (w.scope !== 'me' && cost % 2 !== 0) return 1e6 + cost;
+    if (w.scope === 'both' && cost % 2 !== 0) return 1e6 + cost;
     return cost;
   }
-  function openWishes() {
+  function openWishes(onlyShared) {
     return S.db.wishlist
-      .filter(function (w) { return w.status !== 'redeemed' && w.status !== 'done'; })
+      .filter(function (w) { return w.status !== 'redeemed' && w.status !== 'done' && (!onlyShared || w.scope === 'both'); })
       .slice()
       .sort(function (a, b) { return wishRank(a) - wishRank(b); });
   }
@@ -907,7 +907,7 @@
       '</div>';
 
     /* ----- ② 想一起做的事：只列最近能达成的 3 条 ----- */
-    var top = openWishes().slice(0, 3);
+    var top = openWishes(true).slice(0, 3);
     var wishRows = top.map(function (w) {
       var c = S.cat(w.cat === 'together' ? 'relate' : w.cat === 'eat' ? 'life' : 'leisure');
       return '<button class="prog-row" data-act="go" data-go="wishlist">' +
@@ -916,7 +916,7 @@
         '<span class="prog-main">' +
           '<span class="prog-name">' + esc(w.name || '还没起名') + '</span>' +
           '<span class="prog-dots"><span class="txt">' +
-            (w.scope === 'me' ? '只属于我 · ' : '') + esc(w.executorLabel || '我们一起') + ' · ' + wishCostText(w) +
+            esc(w.executorLabel || '我们一起') + ' · ' + wishCostText(w) +
           '</span></span>' +
         '</span>' +
         '<span class="list-arrow">' + UI.icon('right', 16) + '</span>' +
@@ -933,7 +933,8 @@
 
     /* ----- ③ 一起做过的：兑换 / 见面 / 里程碑，倒序一行一条 ----- */
     var events = [];
-    S.db.redemptions.filter(function(r){return r.status !== 'pending' && r.status !== 'cancelled';}).forEach(function (r) {
+    /* 一起做过的只收共同的兑换；单人兑的算他自己的，不进这条时间线 */
+    S.db.redemptions.filter(function(r){return r.status !== 'pending' && r.status !== 'cancelled' && r.wallet === 'ours';}).forEach(function (r) {
       events.push({ date: r.date, text: r.name || '兑换', ico: 'gift' });
     });
     S.db.milestones.forEach(function (m) {
@@ -977,10 +978,12 @@
      兑换（原「积分」页：只管兑换，不再复述账本）
      ============================================================ */
   /* 分值判断：个人愿望全额扣我的分；共同愿望各出一半，且分值必须是偶数 */
-  function wishWallet(w) { return w.scope === 'me' ? 'mine' : 'ours'; }
+  /* 只有「我们俩」的才用共同分；单人的一律用他自己的分 */
+  function wishWallet(w) { return w.scope === 'both' ? 'ours' : 'mine'; }
   function wishCheck(w) {
     var cost = wishCost(w);
     if (cost > 10000) return { ok: false, reason: 'nocost', gap: 0, pay: 0 };
+    if (w.scope === 'him') return { ok: false, reason: 'his', gap: 0, pay: 0 };
     if (wishWallet(w) === 'mine') {
       var mine = S.pointsOf('me', 'mine');
       return { ok: cost <= mine, gap: cost - mine, pay: cost };
@@ -1045,7 +1048,8 @@
     /* 一条都兑不了时，只报卡在哪里 */
     var blocker = null;
     for (var i = 0; i < list.length; i++) {
-      if (!wishCheck(list[i]).ok) { blocker = list[i]; break; }
+      var c0 = wishCheck(list[i]);
+      if (!c0.ok && c0.reason !== 'his') { blocker = list[i]; break; }
     }
     var gapText;
     if (!list.length) {
@@ -1079,7 +1083,8 @@
           UI.icon('gift', 17) + '</span>' +
         '<span class="prog-main">' +
           '<span class="prog-name" style="font-size:13.5px">' + esc(r.name || '兑换') + '</span>' +
-          '<span class="prog-dots"><span class="txt">' + D.md(r.date) + '</span></span>' +
+          '<span class="prog-dots"><span class="txt">' +
+            (r.wallet === 'ours' ? '一起的 · ' : '我的 · ') + D.md(r.date) + '</span></span>' +
         '</span>' +
       '</div>';
     }).join('');
@@ -1889,57 +1894,83 @@
       var r = S.db.redemptions.filter(function (x) { return x.wishId === w.id; })[0];
       return r && r.date ? D.md(r.date) : '';
     }
+    function who(w) {
+      return w.scope === 'both' ? '我们一起' : w.scope === 'him' ? '他的' : '我的';
+    }
+    function catOf(w) {
+      return S.cat(w.cat === 'together' ? 'relate' : w.cat === 'eat' ? 'life' : 'leisure');
+    }
 
-    /* 一张单子，不分类：按「离能兑最近」排，能兑的在前，没定分值的垫底 */
-    var list = S.db.wishlist.filter(function (w) { return !isDone(w); })
+    var open = S.db.wishlist.filter(function (w) { return !isDone(w); });
+    /* 一起的：按离能兑最近排 */
+    var shared = open.filter(function (w) { return w.scope === 'both'; })
       .sort(function (a, b) { return wishRank(a) - wishRank(b); });
+    /* 单人的：我的在前、他的在后，各自按分值 */
+    var single = open.filter(function (w) { return w.scope !== 'both'; })
+      .sort(function (a, b) {
+        var ka = a.scope === 'me' ? 0 : 1, kb = b.scope === 'me' ? 0 : 1;
+        return (ka - kb) || (wishRank(a) - wishRank(b));
+      });
 
-    var rows = list.map(function (w) {
-      var c = S.cat(w.cat === 'together' ? 'relate' : w.cat === 'eat' ? 'life' : 'leisure');
+    function openRow(w) {
+      var c = catOf(w), mine = w.scope !== 'him';
       return '<div class="wi-row">' +
         '<span class="wi-ico" style="background:' + UI.rgba(c.color, .18) + ';color:' + UI.shade(c.color) + '">' +
           UI.icon(w.icon || 'star', 19) + '</span>' +
         '<span class="wi-main"><span class="wi-name">' + esc(w.name) + '</span>' +
-          '<span class="wi-meta">' + (w.scope === 'me' ? '只属于我 · ' : '') +
-            esc(w.executorLabel) + ' · ' + wishCostText(w) + '</span></span>' +
+          '<span class="wi-meta">' + esc(who(w)) + ' · ' + wishCostText(w) + '</span></span>' +
         '<button class="wi-edit" data-act="open-edit" data-kind="wish" data-id="' + w.id + '">' +
           UI.icon('edit', 15) + '</button>' +
-        '<button class="wi-btn saving" data-act="redeem" data-id="' + w.id + '">去兑换' + UI.icon('right', 12) + '</button>' +
+        (mine
+          ? '<button class="wi-btn saving" data-act="redeem" data-id="' + w.id + '">去兑换' + UI.icon('right', 12) + '</button>'
+          : '<span class="wi-btn his" title="这是对方的愿望，用他自己的分兑">他来兑</span>') +
       '</div>';
-    }).join('');
+    }
+
+    function doneRow(w) {
+      return '<div class="wi-row wi-done">' +
+        '<span class="wi-ico" style="background:var(--gray-soft);color:var(--ink-3)">' +
+          UI.icon(w.icon || 'star', 19) + '</span>' +
+        '<span class="wi-main"><span class="wi-name">' + esc(w.name) + '</span>' +
+          '<span class="wi-meta">' + esc(who(w)) + ' · ' + esc(w.pointsLabel) + ' 分' +
+            (doneDate(w) ? ' · ' + doneDate(w) : '') + '</span></span>' +
+      '</div>';
+    }
+
+    function section(title, list, row, emptyText) {
+      return '<div class="wl-sec">' +
+        '<div class="wl-sec-head">' + title + '<span class="n">' + list.length + '</span></div>' +
+        (list.length ? list.map(row).join('') : '<div class="empty" style="padding:10px 0">' + emptyText + '</div>') +
+      '</div>';
+    }
 
     var listCard = '<div class="card">' +
       '<div class="card-title">想做的' +
         '<button class="wg-add" style="background:var(--pink-soft);color:var(--pink-deep)" data-act="wish-add">' +
           UI.icon('plus', 12) + '新增愿望</button>' +
       '</div>' +
-      (rows || '<div class="empty">还没有想做的事。<br>想到什么就加一条，不用分类。</div>') +
+      section('一起的', shared, openRow, '还没有两个人一起做的事。') +
+      section('单人的', single, openRow, '还没有只属于一个人的事。') +
     '</div>';
 
-    /* 已经做过的：只读，没有编辑和兑换按钮，不跟上面抢位置 */
-    var doneList = S.db.wishlist.filter(isDone);
+    var doneAll = S.db.wishlist.filter(isDone);
+    var doneShared = doneAll.filter(function (w) { return w.scope === 'both'; });
+    var doneSingle = doneAll.filter(function (w) { return w.scope !== 'both'; });
 
-    var doneCard = doneList.length ? '<div class="card">' +
-      '<div class="card-title">已经做过的<span class="sub">' + doneList.length + ' 件</span></div>' +
-      doneList.map(function (w) {
-        return '<div class="wi-row wi-done">' +
-          '<span class="wi-ico" style="background:var(--gray-soft);color:var(--ink-3)">' +
-            UI.icon(w.icon || 'star', 19) + '</span>' +
-          '<span class="wi-main"><span class="wi-name">' + esc(w.name) + '</span>' +
-            '<span class="wi-meta">' + esc(w.pointsLabel) + ' 分 · ' + esc(w.executorLabel) +
-              (doneDate(w) ? ' · ' + doneDate(w) : '') + '</span></span>' +
-        '</div>';
-      }).join('') +
+    var doneCard = doneAll.length ? '<div class="card">' +
+      '<div class="card-title">已经做过的<span class="sub">' + doneAll.length + ' 件</span></div>' +
+      section('一起的', doneShared, doneRow, '') +
+      section('单人的', doneSingle, doneRow, '') +
     '</div>' : '';
 
     return sub(
       UI.subHead('设置', '愿望清单管理', '') +
-      '<div class="sub-lead">想一起做的事都在这儿，做完了就往下走。</div>' +
+      '<div class="sub-lead">一起的、各自的分开记，做完了就往下走。</div>' +
       listCard +
       doneCard +
       '<div class="tip-band" style="align-items:flex-start">' + UI.icon('star', 14) +
-        '<span>具体想做的事在这里加；没有对应具体愿望的行为，去奖励清单。<br>' +
-        '可关联一个奖励模板，复用设置，但不重复创建。</span></div>' +
+        '<span>一起的用共同分，各出一半；单人的用他自己的分，只有本人能兑。<br>' +
+        '没有对应具体愿望的行为，去奖励清单。</span></div>' +
       DEMO
     );
   };
@@ -2023,8 +2054,8 @@
       body =
         field('名称', input('e-name', r.name || '', '比如：周末一起去看展')) +
         field('需要的分', input('e-points', r.pointsLabel || '待定', '待定'), '两个人的兑换要能被 2 整除，各出一半。') +
-        field('属于谁', chipsPick('scope', r.scope || 'both', [['me', '只属于我'], ['both', '我们俩']]),
-          '只属于我的，用我自己的分兑，一个人就能兑；我们俩的，各出一半，要两个人都点头。') +
+        field('属于谁', chipsPick('scope', r.scope || 'both', [['me', '只属于我'], ['him', '只属于对方'], ['both', '我们俩']]),
+          '只属于一个人的，用他自己的分兑，一个人就能兑；我们俩的，各出一半，要两个人都点头。') +
         field('谁执行', chipsPick('executor', r.executor, [['me', '我来安排'], ['him', '他来安排'], ['both', '我们一起']]),
           '必须写清谁做，不能只写物品。');
     }
