@@ -96,7 +96,9 @@ function protectPersonal(base,requested,slot){
 }
 /* 记一笔也发分：每条 1 分，每人每天最多 3 条。
    只对生效日之后的记录生效，避免把历史记录一次性补成一大笔分。 */
-const ENTRY_POINTS_SINCE='2026-11-02',ENTRY_POINTS_PER=1,ENTRY_POINTS_DAILY=3;
+/* 记一笔曾经发过分，2026-11-02 之后取消：奖励「记录」这个动作没有意义，
+   而且写什么都行、无法核实。历史分保留，不追溯扣除。 */
+const ENTRY_POINTS_SINCE='2026-11-02',ENTRY_POINTS_UNTIL='2026-11-02',ENTRY_POINTS_PER=1,ENTRY_POINTS_DAILY=3;
 /* 钱包：旧记录没有 wallet 字段，一律算个人分 */
 const walletTag=x=>x&&x.wallet==='ours'?'ours':'mine';
 function reconcilePoints(before,after){
@@ -117,7 +119,7 @@ function reconcilePoints(before,after){
  /* 记一笔：不进目标的那种，按天取前 3 条各 1 分 */
  const days=new Map();
  for(const e of after.entries){
-  if(e.goalId||String(e.date||'')<ENTRY_POINTS_SINCE)continue;
+  if(e.goalId||String(e.date||'')<ENTRY_POINTS_SINCE||String(e.date||'')>ENTRY_POINTS_UNTIL)continue;
   const key=e.memberId+'|'+e.date;
   if(!days.has(key))days.set(key,[]);
   days.get(key).push(e);

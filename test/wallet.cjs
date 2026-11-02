@@ -103,14 +103,14 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  assert.equal(balance(r.data.data,'me','mine'),5,'从我的分里扣 3');
  assert.equal(balance(r.data.data,'me','ours'),1,'共同分不受影响');
 
- /* H. 记一笔：每天最多 3 分 */
+ /* H. 记一笔不再发分（2026-11-02 之后取消） */
  s=await get(a.cookie);
  for(let i=1;i<=4;i++)s.data.entries.push({id:'n'+i,memberId:'me',date:'2026-11-03',start:'0'+i+':00',end:'0'+i+':30',minutes:30,content:'记'+i,categoryId:'none',visibility:'shared'});
  assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
  s=await get(a.cookie);
  const dayPts=s.data.points_ledger.filter(p=>p.type==='entry'&&p.date==='2026-11-03');
- assert.equal(dayPts.length,3,'每天最多 3 条计分');
- assert.equal(balance(s.data,'me','mine'),8,'记一笔只进我的分，不动共同分');
+ assert.equal(dayPts.length,0,'记一笔不再发分');
+ assert.equal(balance(s.data,'me','mine'),5,'记录不改变我的分');
 
- console.log('PASS: two wallets, shared goals, half payment, both confirm, daily entry cap');
+ console.log('PASS: two wallets, shared goals, half payment, both confirm, entries earn nothing');
 }finally{proc.kill();setTimeout(()=>fs.rmSync(dir,{recursive:true,force:true}),500)}})().catch(e=>{console.error(e);process.exitCode=1});
