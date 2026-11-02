@@ -990,7 +990,7 @@
     return { ok: cost / 2 <= ours, gap: cost / 2 - ours, pay: cost / 2 };
   }
   /* pages-main 与 pages-sub 是两个独立闭包，这里把分值判断交给全局，免得各写一份 */
-  global.Wish = { cost: wishCost, costText: wishCostText, wallet: wishWallet, check: wishCheck };
+  global.Wish = { cost: wishCost, costText: wishCostText, wallet: wishWallet, check: wishCheck, rank: wishRank };
 
   Pages.points = function (st) {
     var list = openWishes();
@@ -1388,6 +1388,7 @@
   var Pages = global.Pages || {};
   var W = global.Wish || {};
   var wishCost = W.cost, wishCostText = W.costText, wishWallet = W.wallet, wishCheck = W.check;
+  var wishRank = W.rank || function () { return 0; };
 
   function esc(s) { return UI.esc(s); }
   function sub(html) { return '<div class="page"><div class="sub-wrap">' + html + '</div></div>'; }
@@ -1614,8 +1615,7 @@
           ';display:flex;align-items:center;justify-content:center">' + UI.icon(w.icon || 'star', 26) + '</div>' +
         '<div style="font-family:var(--serif);font-size:21px;font-weight:600;letter-spacing:.6px">' + esc(w.name) + '</div>' +
         '<div style="font-size:12.5px;color:var(--ink-3);margin-top:6px">' +
-          (w.cat === 'together' ? '一起做的事' : w.cat === 'eat' ? '想吃的事' : '想去的事') +
-          ' · ' + esc(w.executorLabel) + '执行</div>' +
+          (w.scope === 'me' ? '只属于我 · ' : '') + esc(w.executorLabel) + '执行</div>' +
       '</div>' +
 
       '<div class="card">' +
@@ -1883,12 +1883,6 @@
      ⑭ 愿望清单管理
      ============================================================ */
   Pages.wishlist = function () {
-    var groups = [
-      { k: 'together', n: '一起做的', icon: 'heart', bg: 'var(--pink-soft)', fg: 'var(--pink-deep)', add: 'var(--pink-soft)' },
-      { k: 'eat',      n: '想吃的',   icon: 'food',  bg: 'var(--blue-soft)', fg: 'var(--blue-ink)', add: 'var(--blue-soft)' },
-      { k: 'go',       n: '想去的',   icon: 'pin',   bg: 'var(--green-soft)', fg: '#5F8F58',        add: 'var(--green-soft)' }
-    ];
-
     /* 做完了就离开这张单子，去下面的「已经做过的」 */
     function isDone(w) { return w.status === 'redeemed' || w.status === 'done'; }
     function doneDate(w) {
@@ -1896,29 +1890,31 @@
       return r && r.date ? D.md(r.date) : '';
     }
 
-    var html = groups.map(function (g) {
-      var list = S.db.wishlist.filter(function (w) { return w.cat === g.k && !isDone(w); });
-      return '<div class="wish-group">' +
-        '<div class="wish-group-head">' +
-          '<span class="wg-ico" style="background:' + g.bg + ';color:' + g.fg + '">' + UI.icon(g.icon, 18) + '</span>' +
-          '<span class="wg-k">' + g.n + '</span>' +
-          '<button class="wg-add" style="background:' + g.add + ';color:' + g.fg + '" data-act="wish-add" data-k="' + g.k + '">' +
-            UI.icon('plus', 12) + '新增愿望</button>' +
-        '</div>' +
-        (list.length ? list.map(function (w) {
-          var c = S.cat(g.k === 'together' ? 'relate' : g.k === 'eat' ? 'life' : 'leisure');
-          return '<div class="wi-row">' +
-            '<span class="wi-ico" style="background:' + UI.rgba(c.color, .18) + ';color:' + UI.shade(c.color) + '">' +
-              UI.icon(w.icon || 'star', 19) + '</span>' +
-            '<span class="wi-main"><span class="wi-name">' + esc(w.name) + '</span>' +
-              '<span class="wi-meta">积分' + esc(w.pointsLabel) + ' · ' + esc(w.executorLabel) + '执行</span></span>' +
-            '<button class="wi-edit" data-act="open-edit" data-kind="wish" data-id="' + w.id + '">' +
-              UI.icon('edit', 15) + '</button>' +
-            '<button class="wi-btn saving" data-act="redeem" data-id="' + w.id + '">去兑换' + UI.icon('right', 12) + '</button>' +
-          '</div>';
-        }).join('') : '<div class="empty">这一组还没有愿望。</div>') +
+    /* 一张单子，不分类：按「离能兑最近」排，能兑的在前，没定分值的垫底 */
+    var list = S.db.wishlist.filter(function (w) { return !isDone(w); })
+      .sort(function (a, b) { return wishRank(a) - wishRank(b); });
+
+    var rows = list.map(function (w) {
+      var c = S.cat(w.cat === 'together' ? 'relate' : w.cat === 'eat' ? 'life' : 'leisure');
+      return '<div class="wi-row">' +
+        '<span class="wi-ico" style="background:' + UI.rgba(c.color, .18) + ';color:' + UI.shade(c.color) + '">' +
+          UI.icon(w.icon || 'star', 19) + '</span>' +
+        '<span class="wi-main"><span class="wi-name">' + esc(w.name) + '</span>' +
+          '<span class="wi-meta">' + (w.scope === 'me' ? '只属于我 · ' : '') +
+            esc(w.executorLabel) + ' · ' + wishCostText(w) + '</span></span>' +
+        '<button class="wi-edit" data-act="open-edit" data-kind="wish" data-id="' + w.id + '">' +
+          UI.icon('edit', 15) + '</button>' +
+        '<button class="wi-btn saving" data-act="redeem" data-id="' + w.id + '">去兑换' + UI.icon('right', 12) + '</button>' +
       '</div>';
     }).join('');
+
+    var listCard = '<div class="card">' +
+      '<div class="card-title">想做的' +
+        '<button class="wg-add" style="background:var(--pink-soft);color:var(--pink-deep)" data-act="wish-add">' +
+          UI.icon('plus', 12) + '新增愿望</button>' +
+      '</div>' +
+      (rows || '<div class="empty">还没有想做的事。<br>想到什么就加一条，不用分类。</div>') +
+    '</div>';
 
     /* 已经做过的：只读，没有编辑和兑换按钮，不跟上面抢位置 */
     var doneList = S.db.wishlist.filter(isDone);
@@ -1939,8 +1935,7 @@
     return sub(
       UI.subHead('设置', '愿望清单管理', '') +
       '<div class="sub-lead">想一起做的事都在这儿，做完了就往下走。</div>' +
-      html +
-      '<button class="add-block" data-act="wish-add" data-k="together">' + UI.icon('plus', 15) + '新增愿望</button>' +
+      listCard +
       doneCard +
       '<div class="tip-band" style="align-items:flex-start">' + UI.icon('star', 14) +
         '<span>具体想做的事在这里加；没有对应具体愿望的行为，去奖励清单。<br>' +
@@ -2027,7 +2022,6 @@
     } else {
       body =
         field('名称', input('e-name', r.name || '', '比如：周末一起去看展')) +
-        field('类型', chipsPick('cat', r.cat, [['together', '一起做的'], ['eat', '想吃的'], ['go', '想去的']])) +
         field('需要的分', input('e-points', r.pointsLabel || '待定', '待定'), '两个人的兑换要能被 2 整除，各出一半。') +
         field('属于谁', chipsPick('scope', r.scope || 'both', [['me', '只属于我'], ['both', '我们俩']]),
           '只属于我的，用我自己的分兑，一个人就能兑；我们俩的，各出一半，要两个人都点头。') +
@@ -2285,7 +2279,7 @@
       return {
         id: 'w' + crypto.randomUUID(), cat: cat || 'together', name: '', points: null,
         pointsLabel: '待定', executor: 'both', executorLabel: '我们一起', scope: 'both',
-        status: 'saving', icon: cat === 'eat' ? 'hotpot' : cat === 'go' ? 'beach' : 'art'
+        status: 'saving', icon: 'star'
       };
     },
     cat: function () {
