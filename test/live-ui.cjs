@@ -132,6 +132,11 @@ function config() {
       const page = await context.newPage();
       page.setDefaultTimeout(25000);
       page.on("pageerror", () => errors.push("pageerror"));
+      page.on("dialog", (dialog) =>
+        verified && dialog.type() === "confirm"
+          ? dialog.accept()
+          : dialog.dismiss(),
+      );
       page.on("response", (response) => {
         if (
           response.request().method() === "POST" &&
@@ -191,11 +196,38 @@ function config() {
         page.getByRole("button", { name: "刷新", exact: true }).click(),
       );
     }
+    step = "remove previously generated QA goals through their owner UI";
+    for (const page of pages) {
+      const current = await snapshot(page);
+      const previous = current.data.goals.filter(
+        (g) =>
+          g.memberId === current.session.slot &&
+          /^QA-\d{17}-[a-f0-9]{4}-/.test(g.name) &&
+          g.status === "active",
+      );
+      await refresh(page, "/goals");
+      for (const item of previous) {
+        const row = page
+          .locator(".goal-card")
+          .filter({
+            has: page.locator(".goal-name").filter({ hasText: item.name }),
+          });
+        await ui("cleanup previous own QA goal", () =>
+          row.getByRole("button", { name: "删除", exact: true }).click(),
+        );
+        await expect
+          .poll(async () =>
+            (await snapshot(page)).data.goals.some((g) => g.id === item.id),
+          )
+          .toBe(false);
+      }
+    }
+    recordCheck("仅通过本人页面删除此前自动生成的 QA 约定，保留其他内容");
     async function prepareRecord(page, text, visibility = "shared") {
       const label = "record " + (pages.indexOf(page) === 0 ? "A" : "B") + ": ";
       await refresh(page);
       await ui(label + "select own space", () =>
-        page.locator(".v2-tabs button").first().click(),
+        page.locator(".pair-tabs .pair-tab").first().click(),
       );
       await ui(label + "open editor", () =>
         page.getByRole("button", { name: "记一笔", exact: true }).click(),
@@ -235,7 +267,7 @@ function config() {
     await (await prepareRecord(a, sharedText)).click();
     await waitRecord(a, sharedText);
     await refresh(b);
-    await b.locator(".v2-tabs button").nth(1).click();
+    await b.locator(".pair-tabs .pair-tab").nth(1).click();
     await expect(b.getByText(sharedText, { exact: true })).toBeVisible();
     await expect(b.getByText(privateText, { exact: true })).toHaveCount(0);
     await b.screenshot({
@@ -248,16 +280,22 @@ function config() {
     const goalName = run + "-个人约定",
       checkinText = run + "-打卡";
     await refresh(a, "/goals");
-    await a.getByRole("button", { name: "新增约定", exact: true }).click();
-    const goalDialog = a.getByRole("dialog", { name: "新的约定", exact: true });
+    await a.getByRole("button", { name: /^新增约定/ }).click();
+    const goalDialog = a.getByRole("dialog", { name: "新增约定", exact: true });
     await ui("goal: fill name", () =>
       goalDialog.getByLabel("约定名称").fill(goalName),
     );
     await ui("goal: set checkin points", () =>
-      goalDialog.getByLabel("每次完成获得积分").fill("3"),
+      goalDialog
+        .getByRole("group", { name: "每次完成获得积分", exact: true })
+        .getByRole("button", { name: "3", exact: true })
+        .click(),
     );
     await ui("goal: select owner", () =>
-      goalDialog.getByLabel("属于谁").selectOption("me"),
+      goalDialog
+        .getByRole("group", { name: "属于谁", exact: true })
+        .getByRole("button", { name: "只算我自己的", exact: true })
+        .click(),
     );
     await ui("goal: select privacy", () =>
       goalDialog.getByLabel("可见范围").selectOption("private"),
@@ -267,8 +305,8 @@ function config() {
       .click();
     await expect(goalDialog).toHaveCount(0);
     const goal = a
-      .locator("section.card")
-      .filter({ has: a.locator(".card-title").filter({ hasText: goalName }) });
+      .locator(".goal-card")
+      .filter({ has: a.locator(".goal-name").filter({ hasText: goalName }) });
     await goal.getByRole("button", { name: "记一次打卡", exact: true }).click();
     const checkinDialog = a.getByRole("dialog", {
       name: "记一笔",
@@ -296,7 +334,7 @@ function config() {
       !(await snapshot(b)).data.entries.some((x) => x.content === checkinText),
       "Private checkin leaked to partner",
     );
-    await expect(goal.locator(".v2-metric")).toContainText("1");
+    await expect(goal.locator(".goal-stat .txt")).toHaveText("1/3");
     await a.screenshot({
       path: path.join(output, "goal-checkin-progress.png"),
       fullPage: true,
@@ -307,23 +345,17 @@ function config() {
     await refresh(a, "/points");
     await a.getByRole("heading", { name: "兑换", exact: true }).waitFor();
     const balance = Number(
-      await a
-        .locator("section.card")
-        .filter({ hasText: "我的个人积分" })
-        .locator(".v2-metric")
-        .innerText(),
+      await a.locator('.pool-v[aria-label="我的个人积分"]').innerText(),
     );
     check(
       Number.isFinite(balance) && balance >= 3 && balance < 10000,
       "QA wallet has unexpected balance; review the dedicated test space",
     );
     const rewardName = run + "-余额不足奖励";
-    const rewardCard = a
-      .locator("section.card")
-      .filter({ hasText: "给自己的小奖励" });
-    await rewardCard.getByRole("button", { name: "新增", exact: true }).click();
+    await refresh(a, "/rewards");
+    await a.getByRole("button", { name: "新增奖励", exact: true }).click();
     const rewardDialog = a.getByRole("dialog", {
-      name: "奖励设置",
+      name: "新增奖励",
       exact: true,
     });
     await ui("reward: fill name", () =>
@@ -338,8 +370,8 @@ function config() {
       .getByRole("button", { name: "保存", exact: true })
       .click();
     await expect(rewardDialog).toHaveCount(0);
-    const reward = rewardCard
-      .locator("article")
+    const reward = a
+      .locator("article.wish-item")
       .filter({ hasText: rewardName });
     await expect(
       reward.getByRole("button", { name: "兑换", exact: true }),
@@ -377,11 +409,11 @@ function config() {
         )
         .toBe(2);
       await refresh(page);
-      await page.locator(".v2-tabs button").first().click();
+      await page.locator(".pair-tabs .pair-tab").first().click();
       await expect(
         page.getByText(page === a ? textA : textB, { exact: true }),
       ).toBeVisible();
-      await page.locator(".v2-tabs button").nth(1).click();
+      await page.locator(".pair-tabs .pair-tab").nth(1).click();
       await expect(
         page.getByText(page === a ? textB : textA, { exact: true }),
       ).toBeVisible();
@@ -391,6 +423,216 @@ function config() {
       fullPage: true,
     });
     recordCheck("两个页面同时提交各自记录，刷新后双方均保留且可见");
+
+    step = "story publication and owner-only deletion";
+    const storyA = run + "-她推开书店的门，雨刚好停了。",
+      storyB = run + "-他把热咖啡推到对面，约好下次一起看海。";
+    for (const [page, text] of [
+      [a, storyA],
+      [b, storyB],
+    ]) {
+      await refresh(page, "/story");
+      await ui("story: fill current QA segment", () =>
+        page.locator("#story-input").fill(text),
+      );
+      await ui("story: publish", () =>
+        page.getByRole("button", { name: "发布这一段", exact: true }).click(),
+      );
+      await expect(page).toHaveURL(/#\/story\/full$/);
+      await expect(
+        page.locator(".seg-card").filter({ hasText: text }),
+      ).toBeVisible();
+    }
+    await refresh(a, "/story/full");
+    await refresh(b, "/story/full");
+    const ownA = a.locator(".seg-card").filter({ hasText: storyA }),
+      otherOnA = a.locator(".seg-card").filter({ hasText: storyB });
+    const ownB = b.locator(".seg-card").filter({ hasText: storyB }),
+      otherOnB = b.locator(".seg-card").filter({ hasText: storyA });
+    await expect(otherOnA).toBeVisible();
+    await expect(otherOnB).toBeVisible();
+    await expect(
+      otherOnA.getByRole("button", { name: "删除这一段", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      otherOnB.getByRole("button", { name: "删除这一段", exact: true }),
+    ).toHaveCount(0);
+    const secondSeq = (await snapshot(b)).data.story_entries.find(
+      (x) => x.text === storyB,
+    ).seq;
+    await a.screenshot({
+      path: path.join(output, "story-owner-controls.png"),
+      fullPage: true,
+    });
+    await ui("story: owner A deletes own QA segment", () =>
+      ownA.getByRole("button", { name: "删除这一段", exact: true }).click(),
+    );
+    await expect
+      .poll(async () =>
+        (await snapshot(a)).data.story_entries.some((x) => x.text === storyA),
+      )
+      .toBe(false);
+    check(
+      (await snapshot(b)).data.story_entries.find((x) => x.text === storyB)
+        .seq === secondSeq,
+      "Deleting a story must not renumber its partner's segment",
+    );
+    await ui("story: owner B deletes own QA segment", () =>
+      ownB.getByRole("button", { name: "删除这一段", exact: true }).click(),
+    );
+    await expect
+      .poll(async () =>
+        (await snapshot(b)).data.story_entries.some((x) => x.text === storyB),
+      )
+      .toBe(false);
+    recordCheck("真实发布双方故事，只能删除本人段落，删除不重排对方顺序");
+
+    step = "category deletion migrates current QA record and goal";
+    const categoryName =
+      "QA-" +
+      Date.now().toString(36) +
+      "-" +
+      crypto.randomBytes(2).toString("hex");
+    const categorizedText = run + "-分类删除记录";
+    await refresh(a, "/palette");
+    await a.getByRole("button", { name: "新增分类", exact: true }).click();
+    const categoryDialog = a.getByRole("dialog", {
+      name: "分类设置",
+      exact: true,
+    });
+    await categoryDialog.getByLabel("分类名称").fill(categoryName);
+    await categoryDialog
+      .getByRole("button", { name: "保存分类", exact: true })
+      .click();
+    await expect(categoryDialog).toHaveCount(0);
+    const category = (await snapshot(a)).data.categories.find(
+      (x) => x.name === categoryName,
+    );
+    check(category, "QA category was not saved");
+    const saveCategorized = await prepareRecord(a, categorizedText);
+    await a
+      .getByRole("dialog", { name: "记一笔", exact: true })
+      .getByRole("button", { name: categoryName, exact: true })
+      .click();
+    await saveCategorized.click();
+    await waitRecord(a, categorizedText);
+    await refresh(a, "/goals");
+    await a
+      .getByRole("button", { name: "修改约定：" + goalName, exact: true })
+      .click();
+    const editingGoal = a.getByRole("dialog", {
+      name: "编辑约定",
+      exact: true,
+    });
+    await editingGoal
+      .getByRole("group", { name: "归属分类", exact: true })
+      .getByRole("button", { name: categoryName, exact: true })
+      .click();
+    await editingGoal
+      .getByRole("button", { name: "保存约定", exact: true })
+      .click();
+    await expect(editingGoal).toHaveCount(0);
+    await refresh(b, "/palette");
+    await ui("category: partner deletes this run's QA category", () =>
+      b
+        .getByRole("button", { name: "删除分类：" + categoryName, exact: true })
+        .click(),
+    );
+    await expect
+      .poll(async () =>
+        (await snapshot(a)).data.categories.some((x) => x.id === category.id),
+      )
+      .toBe(false);
+    const reassigned = await snapshot(a);
+    check(
+      reassigned.data.entries.find((e) => e.content === categorizedText)
+        ?.categoryId === "none",
+      "Deleting category must preserve and reassign the QA record",
+    );
+    check(
+      reassigned.data.goals.find((g) => g.name === goalName)?.categoryId ===
+        "none",
+      "Deleting category must preserve and reassign the QA goal",
+    );
+    await refresh(a);
+    const categorizedRow = a.getByRole("button", {
+      name: "修改记录：" + categorizedText,
+      exact: true,
+    });
+    await expect(categorizedRow.locator(".entry-chip")).toHaveText("未分类");
+    await a.screenshot({
+      path: path.join(output, "category-deletion-keeps-record.png"),
+      fullPage: true,
+    });
+    recordCheck("通过分类页删除本次测试分类，原记录和约定保留并显示未分类");
+
+    step = "delete only content created by this run through the UI";
+    async function deleteCurrentRecord(page, text) {
+      check(
+        text.startsWith(run + "-"),
+        "Refusing to delete a record outside this QA run",
+      );
+      await refresh(page);
+      await page.locator(".pair-tabs .pair-tab").first().click();
+      await ui("cleanup: open current QA record", () =>
+        page
+          .getByRole("button", { name: "修改记录：" + text, exact: true })
+          .click(),
+      );
+      await ui("cleanup: confirm current QA record deletion", () =>
+        page
+          .getByRole("dialog", { name: "改一笔", exact: true })
+          .getByRole("button", { name: "删除这条记录", exact: true })
+          .click(),
+      );
+      await expect
+        .poll(async () =>
+          (await snapshot(page)).data.entries.some((e) => e.content === text),
+        )
+        .toBe(false);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
+    await refresh(a, "/rewards");
+    await a
+      .getByRole("button", { name: "删除奖励：" + rewardName, exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        (await snapshot(a)).data.rewards.some((w) => w.name === rewardName),
+      )
+      .toBe(false);
+    for (const text of [privateText, sharedText, textA, categorizedText])
+      await deleteCurrentRecord(a, text);
+    await deleteCurrentRecord(b, textB);
+    const beforeGoalDelete = await snapshot(a),
+      goalId = beforeGoalDelete.data.goals.find((g) => g.name === goalName).id;
+    const earned = beforeGoalDelete.data.points_ledger.filter(
+      (p) => p.entryId === entry.id,
+    );
+    await refresh(a, "/goals");
+    await goal.getByRole("button", { name: "删除", exact: true }).click();
+    await expect
+      .poll(async () =>
+        (await snapshot(a)).data.goals.some((g) => g.id === goalId),
+      )
+      .toBe(false);
+    const afterGoalDelete = await snapshot(a);
+    check(
+      afterGoalDelete.data.entries.some((e) => e.id === entry.id),
+      "Deleting the QA goal removed its historical checkin",
+    );
+    check(
+      JSON.stringify(
+        afterGoalDelete.data.points_ledger.filter(
+          (p) => p.entryId === entry.id,
+        ),
+      ) === JSON.stringify(earned),
+      "Deleting the QA goal changed already earned points",
+    );
+    await deleteCurrentRecord(a, checkinText);
+    recordCheck(
+      "页面删除本次记录/奖励/约定；删除约定保留打卡及积分，再单独删除本次打卡",
+    );
     check(errors.length === 0, "Browser JavaScript errors occurred");
     recordCheck("上述流程没有浏览器未捕获脚本错误");
     report.success = true;

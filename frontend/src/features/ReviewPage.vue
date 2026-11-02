@@ -1,151 +1,212 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useSpace } from "../stores/space";
+import type { Entry, Slot } from "../models";
+import { today, shift, weekStart, duration } from "../lib/date";
+import { monthDay, weekday, catIcon, rgba } from "../lib/presentation";
 import PageHead from "../components/PageHead.vue";
-import { today, duration, shift } from "../lib/date";
-import type { Slot } from "../models";
+import Icon from "../components/Icon.vue";
+import MemberAvatar from "../components/MemberAvatar.vue";
+import EntryList from "../components/EntryList.vue";
+import MonthCalendar from "../components/MonthCalendar.vue";
+import MoodChart from "../components/MoodChart.vue";
+import RecordEditor from "./records/RecordEditor.vue";
 const s = useSpace(),
   month = ref(today().slice(0, 7)),
-  scope = ref<Slot | "all">(s.slot),
-  selected = ref(""),
-  low = ref(false);
-const rows = computed(() =>
+  selected = ref(today()),
+  scope = ref<Slot | "all">("all"),
+  happyDay = ref(""),
+  low = ref(false),
+  editing = ref<Entry>();
+const dayRows = (slot: Slot) =>
+  s.data.entries
+    .filter((e) => e.date === selected.value && e.memberId === slot)
+    .slice()
+    .sort((a, b) => a.start.localeCompare(b.start));
+const monthRows = computed(() =>
   s.data.entries.filter(
     (e) =>
       e.date.startsWith(month.value) &&
-      (scope.value === "all" || e.memberId === scope.value) &&
-      (!selected.value || e.date === selected.value) &&
-      (!low.value || (!!e.happy && e.happy <= 2)),
+      (scope.value === "all" || e.memberId === scope.value),
   ),
 );
-const total = computed(() => rows.value.reduce((n, e) => n + e.minutes, 0)),
-  days = computed(() => new Set(rows.value.map((e) => e.date)).size);
-const dist = computed(() =>
+const distribution = computed(() =>
   s.data.categories
     .map((c) => ({
       ...c,
-      minutes: rows.value
+      minutes: monthRows.value
         .filter((e) => (e.categoryId || "none") === c.id)
         .reduce((n, e) => n + e.minutes, 0),
     }))
-    .filter((c) => c.minutes),
+    .filter((c) => c.minutes)
+    .sort((a, b) => b.minutes - a.minutes),
 );
-const calendar = computed(() => {
-  const first = month.value + "-01",
-    offset = (new Date(first + "T12:00:00").getDay() + 6) % 7;
-  return Array.from({ length: 42 }, (_, i) => {
-    const key = shift(first, i - offset);
-    return {
-      key,
-      day: Number(key.slice(8)),
-      inside: key.startsWith(month.value),
-      has: s.data.entries.some(
+const series = computed(() =>
+  Array.from({ length: 7 }, (_, i) => {
+    const date = shift(today(), i - 6),
+      rows = s.data.entries.filter(
         (e) =>
-          e.date === key &&
-          (scope.value === "all" || e.memberId === scope.value),
-      ),
+          e.date === date &&
+          e.happy &&
+          e.memberId === (scope.value === s.other ? s.other : s.slot),
+      );
+    return {
+      date,
+      value: rows.length
+        ? rows.reduce((n, e) => n + (e.happy || 0), 0) / rows.length
+        : null,
     };
-  });
-});
-const mood = computed(() => {
-  const list = rows.value.filter((e) => e.happy);
-  return list.length
-    ? (list.reduce((n, e) => n + e.happy!, 0) / list.length).toFixed(1)
-    : "—";
-});
+  }),
+);
+const lows = computed(() =>
+  s.data.entries.filter(
+    (e) =>
+      e.happy &&
+      e.happy <= 2 &&
+      e.memberId === (scope.value === s.other ? s.other : s.slot) &&
+      (happyDay.value
+        ? e.date === happyDay.value
+        : e.date >= shift(today(), -6) && e.date <= today()),
+  ),
+);
+const selfTime = computed(() =>
+  s.data.entries
+    .filter(
+      (e) =>
+        e.date >= weekStart() &&
+        e.date <= today() &&
+        ["growth", "leisure"].includes(e.categoryId || "") &&
+        (scope.value === "all" || e.memberId === scope.value),
+    )
+    .reduce((n, e) => n + e.minutes, 0),
+);
 </script>
 <template>
-  <PageHead title="回看" subtitle="回头看看，是怎样一点点走过来的。" />
-  <div class="v2-grid">
-    <label class="v2-field"
-      >月份<input v-model="month" type="month" @change="selected = ''" /></label
-    ><label class="v2-field"
-      >谁的记录<select v-model="scope">
-        <option :value="s.slot">{{ s.member(s.slot).name }}</option>
-        <option :value="s.other">{{ s.member(s.other).name }}分享的</option>
-        <option value="all">双方可见记录</option>
-      </select></label
-    >
-  </div>
-  <section class="card">
-    <div class="v2-grid">
-      <div>
-        <span class="muted">记录时长</span>
-        <p class="v2-metric" style="font-size: 23px">{{ duration(total) }}</p>
+  <div class="page narrow">
+    <div class="topline">
+      <div class="brand">我们</div>
+      <div class="topline-date"><Icon name="calendar" :size="17" /></div>
+    </div>
+    <PageHead title="回看" subtitle="没有记录的日子也没关系。" hide-settings />
+    <section class="card">
+      <MonthCalendar
+        v-model:month="month"
+        v-model:selected="selected"
+        :entries="s.data.entries"
+        :slot="s.slot"
+      />
+    </section>
+    <section class="card">
+      <div class="card-title">
+        <span
+          >{{ monthDay(selected) }} ·
+          {{ selected === today() ? "今天" : weekday(selected) }}</span
+        ><span class="sub">两人并排</span>
       </div>
-      <div>
-        <span class="muted">有记录的日子</span>
-        <p class="v2-metric">{{ days }}</p>
-      </div>
-    </div>
-    <p class="muted">平均心情 {{ mood }} · {{ rows.length }} 条记录</p>
-  </section>
-  <section class="card">
-    <div class="card-title">
-      这个月的足迹<button
-        v-if="selected"
-        class="card-link"
-        @click="selected = ''"
-      >
-        查看全月
-      </button>
-    </div>
-    <div class="v2-calendar">
-      <span
-        v-for="w in ['一', '二', '三', '四', '五', '六', '日']"
-        :key="w"
-        class="muted"
-        >{{ w }}</span
-      ><button
-        v-for="d in calendar"
-        :key="d.key"
-        :disabled="!d.inside"
-        :class="{ marked: d.has, selected: d.key === selected }"
-        @click="selected = d.key === selected ? '' : d.key"
-      >
-        {{ d.day }}
-      </button>
-    </div>
-  </section>
-  <section class="card">
-    <div class="card-title">时间都去了哪里</div>
-    <article v-for="c in dist" :key="c.id" class="v2-item">
-      <span class="v2-dot" :style="{ background: c.color }" />
-      <div class="v2-item-main">
-        <strong>{{ c.name }} · {{ duration(c.minutes) }}</strong>
-        <div class="v2-progress">
-          <span
-            :style="{
-              width: (c.minutes / Math.max(total, 1)) * 100 + '%',
-              background: c.color,
-            }"
+      <div class="review-pair">
+        <div v-for="slot in [s.slot, s.other]" :key="slot" class="review-col">
+          <div class="who-title">
+            <MemberAvatar :member="s.member(slot)" :size="20" /><span>{{
+              s.member(slot).name
+            }}</span>
+          </div>
+          <EntryList
+            :entries="dayRows(slot)"
+            :editable="slot === s.slot"
+            @edit="editing = $event"
           />
         </div>
       </div>
-    </article>
-    <p v-if="!dist.length" class="empty">这个范围里还没有记录。</p>
-  </section>
-  <button class="btn-ghost" @click="low = !low">
-    {{ low ? "显示全部记录" : "看看心情低落的时候" }}
-  </button>
-  <section class="card">
-    <div class="card-title">{{ selected || month }} 的记录</div>
-    <article
-      v-for="e in rows
-        .slice()
-        .sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start))"
-      :key="e.id"
-      class="v2-item"
-    >
-      <div class="v2-item-main">
-        <strong>{{ e.content }}</strong>
-        <p>
-          {{ e.date }} {{ e.start }}–{{ e.end }} · {{ s.member(e.memberId).name
-          }}<template v-if="e.happy"> · 心情 {{ e.happy }}</template>
-        </p>
-        <p v-if="e.note">{{ e.note }}</p>
+    </section>
+    <section class="card">
+      <div class="card-title">
+        时间分布
+        <div class="mini-tabs" style="margin: 0" aria-label="回看范围">
+          <button
+            class="mini-tab"
+            :class="{ on: scope === 'all' }"
+            @click="scope = 'all'"
+          >
+            我们</button
+          ><button
+            class="mini-tab"
+            :class="{ on: scope === s.slot }"
+            @click="scope = s.slot"
+          >
+            我</button
+          ><button
+            class="mini-tab"
+            :class="{ on: scope === s.other }"
+            @click="scope = s.other"
+          >
+            对方
+          </button>
+        </div>
       </div>
-    </article>
-    <p v-if="!rows.length" class="empty">还没有记录。</p>
-  </section>
+      <div v-for="c in distribution" :key="c.id" class="bar-row">
+        <span
+          class="bar-ico"
+          :style="{ background: rgba(c.color), color: c.color }"
+          ><Icon :name="catIcon(c.id)" :size="14" /></span
+        ><span class="bar-name">{{ c.name }}</span
+        ><span class="bar-track"
+          ><i
+            :style="{
+              width: (c.minutes / (distribution[0]?.minutes || 1)) * 100 + '%',
+              background: c.color,
+            }"
+          ></i></span
+        ><span class="bar-val">{{ Math.round(c.minutes / 6) / 10 }}h</span>
+      </div>
+      <div v-if="!distribution.length" class="empty">这个月还没有记录。</div>
+      <div class="self-line">
+        <span>给自己的时间 · 本周</span><b>{{ duration(selfTime) }}</b>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-title">
+        快乐值<span class="sub">近 7 天</span
+        ><button
+          class="card-link"
+          @click="
+            low = !low;
+            happyDay = '';
+          "
+        >
+          {{ low ? "收起低分记录" : "看看低分记录" }}
+        </button>
+      </div>
+      <template v-if="series.some((p) => p.value !== null)"
+        ><MoodChart
+          :series="series"
+          :selected="happyDay"
+          @select="
+            happyDay = $event;
+            low = true;
+          "
+        />
+        <div class="chart-tip">
+          点某一天 → 看那天的低分记录。不做评价，也不扣分。
+        </div></template
+      >
+      <div v-else class="empty">
+        近 7 天还没有快乐值记录。<br />记一笔的时候可以顺手打一个分。
+      </div>
+      <div v-if="low" class="low-list">
+        <div v-for="e in lows" :key="e.id" class="low-item">
+          <span class="t">{{ monthDay(e.date) }}</span
+          ><span>{{ e.content }}</span
+          ><span class="s">{{ e.happy }} 分</span>
+        </div>
+        <p v-if="!lows.length" class="chip-hint">
+          {{ happyDay ? monthDay(happyDay) : "近 7 天" }}没有低分记录。
+        </p>
+      </div>
+    </section>
+    <RecordEditor
+      v-if="editing"
+      :entry="editing"
+      @close="editing = undefined"
+    />
+  </div>
 </template>

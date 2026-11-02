@@ -20,6 +20,13 @@ module.exports = function ({
   create,
 }) {
   switch (type) {
+    case "story.delete": {
+      const item = find("story_entries");
+      own(item, slot);
+      version("story_entries", item);
+      data.story_entries = data.story_entries.filter((x) => x.id !== item.id);
+      break;
+    }
     case "story.publish": {
       const existing = data.story_entries.find((x) => x.id === p.id);
       if (existing) {

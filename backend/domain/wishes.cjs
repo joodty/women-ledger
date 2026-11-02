@@ -20,10 +20,40 @@ module.exports = function ({
   create,
 }) {
   switch (type) {
+    case "wish.delete":
+    case "reward.delete": {
+      const collection = type === "wish.delete" ? "wishlist" : "rewards";
+      const item = find(collection);
+      fail(
+        !["me", "him"].includes(item.scope) || item.scope === slot,
+        "forbidden",
+        "只能删除自己的个人愿望或奖励",
+        403,
+      );
+      version(collection, item);
+      fail(
+        !data.redemptions.some(
+          (r) =>
+            r.status === "pending" &&
+            (collection === "wishlist" ? r.wishId : r.rewardId) === item.id,
+        ),
+        "validation",
+        "这项内容还有兑换申请，请先取消申请再删除",
+      );
+      item.deleted = true;
+      break;
+    }
     case "wish.save":
     case "reward.save": {
       const collection = type === "wish.save" ? "wishlist" : "rewards",
         old = data[collection].find((x) => x.id === p.id);
+      fail(!old?.deleted, "not_found", "这项内容已删除", 404);
+      fail(
+        !old || !["me", "him"].includes(old.scope) || old.scope === slot,
+        "forbidden",
+        "只能修改自己的个人愿望或奖励",
+        403,
+      );
       if (old) version(collection, old);
       const label = String(p.pointsLabel || "待定").trim();
       fail(

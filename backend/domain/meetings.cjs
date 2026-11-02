@@ -20,6 +20,18 @@ module.exports = function ({
   create,
 }) {
   switch (type) {
+    case "meeting.delete":
+    case "milestone.delete": {
+      const item = find("milestones");
+      fail(
+        type === "meeting.delete" ? item.kind === "meet" : item.kind !== "goal",
+        "validation",
+        "这项内容需要从对应的约定中管理",
+      );
+      version("milestones", item);
+      data.milestones = data.milestones.filter((x) => x.id !== item.id);
+      break;
+    }
     case "meeting.save": {
       const old = p.id ? data.milestones.find((m) => m.id === p.id) : null;
       if (old) version("milestones", old);

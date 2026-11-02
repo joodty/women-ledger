@@ -9,6 +9,9 @@ import Wallet from "./features/WalletPage.vue";
 import Story from "./features/StoryPage.vue";
 import Review from "./features/ReviewPage.vue";
 import Settings from "./features/SettingsPage.vue";
+import WishList from "./features/WishListPage.vue";
+import Meet from "./features/MeetPage.vue";
+import StoryFull from "./features/StoryFullPage.vue";
 import "./styles/theme.css";
 import "./styles/app.css";
 const routes = [
@@ -19,6 +22,12 @@ const routes = [
   { path: "/story", component: Story },
   { path: "/review", component: Review },
   { path: "/settings", component: Settings },
+  { path: "/palette", component: Settings },
+  { path: "/wishlist", component: WishList },
+  { path: "/rewards", component: WishList },
+  { path: "/meet", component: Meet },
+  { path: "/past", component: Meet },
+  { path: "/story/full", component: StoryFull },
   { path: "/:pathMatch(.*)*", redirect: "/" },
 ];
 createApp(App)

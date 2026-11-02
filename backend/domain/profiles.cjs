@@ -40,7 +40,7 @@ module.exports = function ({
       break;
     }
     case "couple.update":
-      version("settings",{id:"couple"});
+      version("settings", { id: "couple" });
       if (p.since !== undefined) {
         date(p.since);
         fail(p.since <= today(), "validation", "起始日期不能晚于今天");

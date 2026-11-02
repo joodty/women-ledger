@@ -10,6 +10,7 @@ const handlers = [
   require("./categories.cjs"),
   require("./meetings.cjs"),
   require("./imports.cjs"),
+  require("./redemptions.cjs"),
 ];
 function apply(data, command, session, versions) {
   const { type, payload: p } = command,
@@ -21,7 +22,7 @@ function apply(data, command, session, versions) {
   );
   function find(collection) {
     const item = data[collection].find((x) => x.id === id(p.id));
-    fail(item, "not_found", "这条内容已经不存在", 404);
+    fail(item && !item.deleted, "not_found", "这条内容已经不存在", 404);
     return item;
   }
   function version(collection, item) {

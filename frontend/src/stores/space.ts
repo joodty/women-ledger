@@ -228,7 +228,7 @@ export const useSpace = defineStore("space", () => {
       data.value.redemptions
         .filter(
           (r) =>
-            !["pending", "cancelled"].includes(r.status || "") &&
+            !["pending", "cancelled", "reversed"].includes(r.status || "") &&
             (r.wallet || "mine") === wallet,
         )
         .reduce((n, r) => n + (id === "me" ? r.fromMe || 0 : r.fromHim || 0), 0)

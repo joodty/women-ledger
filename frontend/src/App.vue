@@ -5,10 +5,29 @@ import AuthPage from "./features/AuthPage.vue";
 import Icon from "./components/Icon.vue";
 import type { Pending } from "./models";
 import { useTask } from "./lib/task";
-import { connectNative } from "./lib/native";
+import { connectNative, clearNative } from "./lib/native";
+import { useRouter } from "vue-router";
 const s = useSpace(),
   showPending = ref(false),
   task = useTask();
+const router = useRouter();
+function refreshPage() {
+  location.reload();
+}
+function settings(section: string) {
+  router.push({
+    path: "/settings",
+    query: { section, open: String(Date.now()) },
+  });
+}
+async function logout() {
+  await task.run(async () => {
+    const account = s.session!.account;
+    await s.logout();
+    await clearNative(account);
+  });
+  if (task.error.value) s.notice = task.error.value;
+}
 connectNative(s);
 const tabs = [
   ["/", "sun", "今天"],
@@ -76,7 +95,16 @@ function readable(value: unknown) {
         @click="showPending = !showPending"
       >
         查看待处理</button
-      ><button v-else @click="s.refresh">刷新</button>
+      ><button v-else @click="refreshPage">刷新</button>
+      <details class="sync-more">
+        <summary>更多</summary>
+        <div class="sync-menu">
+          <button @click="settings('backup')">导入备份</button
+          ><button @click="settings('history')">历史版本</button
+          ><button @click="settings('password')">修改密码</button
+          ><button @click="logout">退出登录</button>
+        </div>
+      </details>
     </div>
     <main class="view">
       <RouterView />

@@ -42,6 +42,12 @@ const server = spawn(process.execPath, ["server.cjs"], {
       a = await ca.newPage(),
       b = await cb.newPage();
     const errors = [];
+    a.on("dialog", (dialog) =>
+      dialog.type() === "confirm" ? dialog.accept() : dialog.dismiss(),
+    );
+    b.on("dialog", (dialog) =>
+      dialog.type() === "confirm" ? dialog.accept() : dialog.dismiss(),
+    );
     a.on("pageerror", (e) => errors.push(e.message));
     b.on("pageerror", (e) => errors.push(e.message));
     async function register(page, user, invite = "") {
@@ -59,7 +65,10 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await a.goto(base + "/#/goals");
     await a.getByRole("button", { name: "新增约定" }).click();
     await a.getByLabel("约定名称").fill("共同运动");
-    await a.getByLabel("属于谁").selectOption("both");
+    await a
+      .getByRole("group", { name: "属于谁", exact: true })
+      .getByRole("button", { name: "我们共同的", exact: true })
+      .click();
     await a.getByRole("button", { name: "保存约定" }).click();
     await expect
       .poll(async () => (await snapshot(a)).data.goals.length)
@@ -112,8 +121,9 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect
       .poll(async () => (await snapshot(a)).data.story_entries[0]?.text.length)
       .toBe(10000);
+    await expect(a).toHaveURL(/#\/story\/full$/);
     await a.reload();
-    await a.getByRole("button", { name: "查看整篇故事" }).click();
+    await expect(a).toHaveURL(/#\/story\/full$/);
     await expect(a.locator(".seg-card .v2-wrap")).toHaveText(longStory);
     await a.goto(base + "/#/");
     await ca.setOffline(true);
@@ -154,7 +164,13 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect
       .poll(async () => (await snapshot(a)).data.couple.since)
       .toBe("2026-01-03");
-    await expect.poll(()=>a.evaluate(()=>localStorage.getItem("women.pending.v1.previous-session.alice"))).toBeNull();
+    await expect
+      .poll(() =>
+        a.evaluate(() =>
+          localStorage.getItem("women.pending.v1.previous-session.alice"),
+        ),
+      )
+      .toBeNull();
     await a.getByRole("button", { name: "收起", exact: true }).click();
     await a.goto(base + "/#/review");
     await a.getByRole("heading", { name: "回看", exact: true }).waitFor();
@@ -168,11 +184,173 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await a.getByRole("button", { name: "保存记录", exact: true }).click();
     await expect(a.getByRole("dialog")).toHaveCount(0);
     await expect(a.locator(".v2-toast")).toBeVisible();
-    await a.getByRole("button", { name: "记一笔", exact: true }).click({ timeout: 1800 });
+    await a
+      .getByRole("button", { name: "记一笔", exact: true })
+      .click({ timeout: 1800 });
     await expect(a.getByRole("dialog", { name: "记一笔" })).toBeVisible();
     await a.getByRole("button", { name: "关闭", exact: true }).click();
     await expect(a.locator(".v2-toast")).toHaveCount(0, { timeout: 5000 });
     await a.setViewportSize({ width: 390, height: 844 });
+
+    // Delete from the restored UI, with ownership controls visible to each member.
+    await b.goto(base + "/#/story");
+    await b.locator("#story-input").fill("由另一位写的段落");
+    await b.getByRole("button", { name: "发布这一段", exact: true }).click();
+    await expect(b).toHaveURL(/#\/story\/full$/);
+    const otherSegment = b.locator(".seg-card").filter({ hasText: longStory });
+    await expect(
+      otherSegment.getByRole("button", { name: "删除这一段", exact: true }),
+    ).toHaveCount(0);
+    await a.goto(base + "/#/story/full");
+    await a.getByRole("button", { name: "刷新", exact: true }).click();
+    await expect(
+      a.locator(".seg-card").filter({ hasText: "由另一位写的段落" }),
+    ).toBeVisible();
+    await expect(
+      a
+        .locator(".seg-card")
+        .filter({ hasText: "由另一位写的段落" })
+        .getByRole("button", { name: "删除这一段", exact: true }),
+    ).toHaveCount(0);
+    await a
+      .locator(".seg-card")
+      .filter({ hasText: longStory })
+      .getByRole("button", { name: "删除这一段", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await snapshot(a)).data.story_entries.length)
+      .toBe(1);
+    assert.equal(
+      (await snapshot(a)).data.story_entries[0].seq,
+      2,
+      "deleting earlier segment must not renumber partner's segment",
+    );
+    await b.reload();
+    await b.getByRole("button", { name: "删除这一段", exact: true }).click();
+    await expect
+      .poll(async () => (await snapshot(b)).data.story_entries.length)
+      .toBe(0);
+
+    await a.goto(base + "/#/palette");
+    await a.getByRole("button", { name: "新增分类", exact: true }).click();
+    const categoryDialog = a.getByRole("dialog", {
+      name: "分类设置",
+      exact: true,
+    });
+    await categoryDialog.getByLabel("分类名称").fill("界面删除回归分类");
+    await categoryDialog
+      .getByRole("button", { name: "保存分类", exact: true })
+      .click();
+    await expect(categoryDialog).toHaveCount(0);
+    const custom = (await snapshot(a)).data.categories.find(
+      (x) => x.name === "界面删除回归分类",
+    );
+    assert(custom);
+    await a.goto(base + "/#/goals");
+    await a
+      .getByRole("button", { name: "修改约定：共同运动", exact: true })
+      .click();
+    await a
+      .getByRole("group", { name: "归属分类", exact: true })
+      .getByRole("button", { name: "界面删除回归分类", exact: true })
+      .click();
+    await a.getByRole("button", { name: "保存约定", exact: true }).click();
+    await expect(a.getByRole("dialog")).toHaveCount(0);
+    await b.goto(base + "/#/");
+    await b
+      .getByRole("button", { name: "修改记录：对方私密打卡", exact: true })
+      .click();
+    await b
+      .getByRole("dialog", { name: "改一笔", exact: true })
+      .getByRole("button", { name: "界面删除回归分类", exact: true })
+      .click();
+    await b.getByRole("button", { name: "保存修改", exact: true }).click();
+    await expect(b.getByRole("dialog")).toHaveCount(0);
+    await a.goto(base + "/#/palette");
+    await a
+      .getByRole("button", { name: "删除分类：界面删除回归分类", exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        (await snapshot(a)).data.categories.some((x) => x.id === custom.id),
+      )
+      .toBe(false);
+    assert.equal((await snapshot(a)).data.goals[0].categoryId, "none");
+    assert.equal(
+      (await snapshot(b)).data.entries.find((x) => x.content === "对方私密打卡")
+        .categoryId,
+      "none",
+    );
+
+    await a.goto(base + "/#/wishlist");
+    await a.getByRole("button", { name: "新增愿望", exact: true }).click();
+    await a
+      .getByRole("dialog", { name: "新增愿望", exact: true })
+      .getByLabel("名称", { exact: true })
+      .fill("本机共享愿望");
+    await a.getByLabel("需要的积分", { exact: true }).fill("4");
+    await a.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(a.getByRole("dialog")).toHaveCount(0);
+    await b.goto(base + "/#/wishlist");
+    await b
+      .getByRole("button", { name: "删除愿望：本机共享愿望", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await snapshot(a)).data.wishlist.length)
+      .toBe(0);
+    await a.goto(base + "/#/rewards");
+    await a.getByRole("button", { name: "新增奖励", exact: true }).click();
+    await a
+      .getByRole("dialog", { name: "新增奖励", exact: true })
+      .getByLabel("名称", { exact: true })
+      .fill("本机个人奖励");
+    await a.getByLabel("需要的积分", { exact: true }).fill("4");
+    await a.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(a.getByRole("dialog")).toHaveCount(0);
+    await b.goto(base + "/#/rewards");
+    await expect(
+      b.getByRole("button", { name: "删除奖励：本机个人奖励", exact: true }),
+    ).toHaveCount(0);
+    await a
+      .getByRole("button", { name: "删除奖励：本机个人奖励", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await snapshot(a)).data.rewards.length)
+      .toBe(0);
+
+    const kept = (await snapshot(b)).data.entries.find(
+      (x) => x.content === "对方私密打卡",
+    );
+    const awarded = (await snapshot(b)).data.points_ledger.filter(
+      (x) => x.entryId === kept.id,
+    );
+    await a.goto(base + "/#/goals");
+    await a
+      .locator(".goal-card")
+      .filter({ hasText: "共同运动" })
+      .getByRole("button", { name: "删除", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await snapshot(a)).data.goals.length)
+      .toBe(0);
+    assert((await snapshot(b)).data.entries.some((x) => x.id === kept.id));
+    assert.deepEqual(
+      (await snapshot(b)).data.points_ledger.filter(
+        (x) => x.entryId === kept.id,
+      ),
+      awarded,
+    );
+    await b.goto(base + "/#/");
+    await b
+      .getByRole("button", { name: "修改记录：对方私密打卡", exact: true })
+      .click();
+    await b.getByRole("button", { name: "删除这条记录", exact: true }).click();
+    await expect
+      .poll(async () =>
+        (await snapshot(b)).data.entries.some((x) => x.id === kept.id),
+      )
+      .toBe(false);
+    await expect(b.getByRole("dialog")).toHaveCount(0);
     assert.deepEqual(errors, []);
     if (process.env.PREVIEW_SCREENSHOT) {
       await a.goto(base);
@@ -183,7 +361,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
       });
     }
     console.log(
-      "PASS: Vue mobile flows, two users, private checkin, voice, 10000 characters, offline restart and legacy recovery",
+      "PASS: restored mobile UI, two users, voice/10000 characters, offline/legacy recovery, story ownership and safe record/goal/category/wish/reward deletion",
     );
   } finally {
     if (browser) await browser.close();

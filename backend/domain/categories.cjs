@@ -20,6 +20,16 @@ module.exports = function ({
   create,
 }) {
   switch (type) {
+    case "category.delete": {
+      const item = find("categories");
+      fail(item.id !== "none", "validation", "未分类是系统分类，不能删除");
+      version("categories", item);
+      for (const list of [data.entries, data.goals])
+        for (const row of list)
+          if (row.categoryId === item.id) row.categoryId = "none";
+      data.categories = data.categories.filter((x) => x.id !== item.id);
+      break;
+    }
     case "category.save": {
       const old = data.categories.find((c) => c.id === p.id);
       if (old) version("categories", old);

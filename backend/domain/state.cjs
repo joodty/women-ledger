@@ -139,6 +139,8 @@ function mergeValue(base, local, remote) {
 }
 function visibleState(data, slot) {
   const result = structuredClone(data);
+  for (const key of ["goals", "wishlist", "rewards"])
+    result[key] = result[key].filter((x) => !x.deleted);
   const hiddenGoals = new Set(
     data.goals
       .filter((x) => x.memberId !== slot && x.visibility === "private")

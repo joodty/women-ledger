@@ -4,17 +4,31 @@ import Modal from "../../components/Modal.vue";
 import { useSpace } from "../../stores/space";
 import { useDraft } from "../../lib/draft";
 import { useTask } from "../../lib/task";
-import { today } from "../../lib/date";
+import { today, duration } from "../../lib/date";
 import type { Entry } from "../../models";
+import { confirmCommand } from "../../lib/confirmCommand";
 const props = defineProps<{ entry?: Entry; goalId?: string }>(),
   emit = defineEmits<{ close: [] }>(),
   s = useSpace(),
   task = useTask();
+const previous = s.data.entries
+  .filter((e) => e.memberId === s.slot && e.date === today())
+  .slice()
+  .sort((a, b) => a.start.localeCompare(b.start))
+  .at(-1);
+const now = new Date(),
+  start =
+    previous?.end ||
+    `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+const endMinutes =
+  (Number(start.slice(0, 2)) * 60 + Number(start.slice(3)) + 60) % 1440;
 const initial = {
   id: props.entry?.id || crypto.randomUUID(),
   date: props.entry?.date || today(),
-  start: props.entry?.start || "09:00",
-  end: props.entry?.end || "10:00",
+  start: props.entry?.start || start,
+  end:
+    props.entry?.end ||
+    `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`,
   content: props.entry?.content || "",
   note: props.entry?.note || "",
   happy: props.entry?.happy ?? null,
@@ -39,6 +53,10 @@ const goals = computed(() =>
       (g.memberId === s.slot || g.scope === "both"),
   ),
 );
+const minutes = computed(() => {
+  const m = (x: string) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3));
+  return (m(f.value.end) - m(f.value.start) + 1440) % 1440;
+});
 function save() {
   task.run(async () => {
     await s.submit(
@@ -53,86 +71,160 @@ function save() {
   });
 }
 function remove() {
-  if (props.entry && confirm("删除这条记录？"))
+  if (props.entry)
     task.run(async () => {
-      await s.submit(
-        "record.delete",
-        { id: props.entry!.id },
-        "删除记录",
-        "entries",
-        f.value.baseVersion,
-      );
-      clear();
-      emit("close");
+      if (
+        await confirmCommand(
+          s,
+          "record.delete",
+          "entries",
+          props.entry!.id,
+          "删除这条记录？相关打卡积分将重新核算；已经消费时请先撤销兑换。",
+          "删除记录",
+          f.value.baseVersion,
+        )
+      ) {
+        clear();
+        emit("close");
+      }
     });
 }
 </script>
 <template>
-  <Modal :title="entry ? '修改记录' : '记一笔'" @close="emit('close')"
+  <Modal :title="entry ? '改一笔' : '记一笔'" @close="emit('close')"
     ><form @submit.prevent="save">
-      <label class="v2-field"
-        >日期<input v-model="f.date" type="date" required
+      <label v-if="entry" class="field"
+        >日期<input v-model="f.date" type="date" class="input-box" required
       /></label>
-      <div class="v2-grid">
-        <label class="v2-field"
-          >开始<input
-            id="f-start"
-            v-model="f.start"
-            type="time"
-            required /></label
-        ><label class="v2-field"
-          >结束<input id="f-end" v-model="f.end" type="time" required
-        /></label>
+      <div class="field">
+        <div class="field-k">时间段</div>
+        <div class="time-row">
+          <label class="time-box"
+            ><span class="tk">开始</span
+            ><input
+              id="f-start"
+              v-model="f.start"
+              type="time"
+              class="time-input"
+              required /></label
+          ><label class="time-box"
+            ><span class="tk">结束</span
+            ><input
+              id="f-end"
+              v-model="f.end"
+              type="time"
+              class="time-input"
+              required
+          /></label>
+          <div class="time-box time-dur">
+            <div class="tk">时长</div>
+            <div class="dv">{{ duration(minutes) }}</div>
+          </div>
+        </div>
       </div>
-      <label class="v2-field"
-        >做了什么<textarea
+      <div class="field">
+        <label class="field-k" for="f-content">干了什么</label
+        ><textarea
           id="f-content"
           v-model="f.content"
-          required
+          aria-label="做了什么"
+          class="textarea"
           maxlength="10000"
-          placeholder="一句话就好，也可以慢慢写"
-        ></textarea></label
-      ><label class="v2-field"
-        >分类<select v-model="f.categoryId">
-          <option value="">未分类</option>
-          <option
+          required
+          placeholder="写具体一点，比如“刷招聘网站”而不是“找工作”"
+        ></textarea>
+        <div class="textarea-foot">
+          <span class="count-badge">{{ f.content.length }}/10000</span>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-k">分类<i>选填</i></div>
+        <div class="chips">
+          <button
             v-for="c in s.data.categories.filter((c) => c.id !== 'none')"
             :key="c.id"
-            :value="c.id"
+            type="button"
+            class="chip-cat"
+            :class="{ on: f.categoryId === c.id }"
+            @click="f.categoryId = f.categoryId === c.id ? '' : c.id"
           >
-            {{ c.name }}
-          </option>
-        </select></label
-      ><label class="v2-field"
-        >计入哪个约定<select id="f-goal" v-model="f.goalId">
-          <option value="">不计入约定</option>
+            <span class="cdot" :style="{ background: c.color }"></span
+            >{{ c.name }}
+          </button>
+        </div>
+        <div class="chip-hint">可以不选分类，先记下来。</div>
+      </div>
+      <label class="field"
+        ><span class="field-k">计入目标<i>选填</i></span
+        ><select
+          id="f-goal"
+          v-model="f.goalId"
+          aria-label="计入哪个约定"
+          class="input-box"
+        >
+          <option value="">不计入目标</option>
           <option v-for="g in goals" :key="g.id" :value="g.id">
             {{ g.name }}
           </option>
+          <option
+            v-if="f.goalId && !goals.some((g) => g.id === f.goalId)"
+            :value="f.goalId"
+          >
+            原约定已结束，保留历史关联
+          </option>
         </select></label
-      ><label class="v2-field"
-        >可见范围<select id="f-visibility" v-model="f.visibility">
-          <option value="shared">双方可见</option>
-          <option value="private">仅自己可见</option>
-        </select></label
-      ><label class="v2-field"
-        >心情<select v-model="f.happy">
-          <option :value="null">不填写</option>
-          <option v-for="n in 5" :key="n" :value="n">{{ n }} 分</option>
-        </select></label
-      ><label class="v2-field"
-        >补充备注<textarea v-model="f.note" maxlength="10000"></textarea>
-      </label>
-      <p class="v2-error" role="alert">{{ warning || task.error.value }}</p>
-      <button
-        class="btn-primary"
-        :disabled="task.busy.value"
-        data-act="save-entry"
       >
-        保存记录</button
-      ><button v-if="entry" class="btn-ghost" type="button" @click="remove">
-        删除记录
+      <label class="field"
+        ><span class="field-k">谁可以看到</span
+        ><select
+          id="f-visibility"
+          v-model="f.visibility"
+          aria-label="可见范围"
+          class="input-box"
+        >
+          <option value="private">仅自己</option>
+          <option value="shared">双方可见</option>
+        </select></label
+      >
+      <label class="field"
+        ><span class="field-k">备注<i>选填</i></span
+        ><input
+          v-model="f.note"
+          class="input-box"
+          maxlength="10000"
+          placeholder="身体信号…"
+      /></label>
+      <div class="field">
+        <div class="field-k">今天的快乐值<i>选填</i></div>
+        <div class="happy-row" role="group" aria-label="快乐值">
+          <button
+            v-for="n in 5"
+            :key="n"
+            type="button"
+            class="happy-dot"
+            :class="{ on: f.happy === n }"
+            :aria-pressed="f.happy === n"
+            @click="f.happy = f.happy === n ? null : n"
+          >
+            {{ n }}
+          </button>
+        </div>
+        <div class="chip-hint">低分的时段会在回看页单独列出来</div>
+      </div>
+      <p class="v2-error" role="alert">{{ warning || task.error.value }}</p>
+      <button class="btn-primary" :disabled="task.busy.value">
+        {{ entry ? "保存修改" : "保存记录" }}</button
+      ><button
+        v-if="entry"
+        class="btn-ghost danger-action"
+        type="button"
+        @click="remove"
+      >
+        删除这条记录
       </button>
+      <div class="foot-line">
+        {{ entry ? "改错了也没关系，随时可以再改。" : "记下来，就已经很好。" }}
+      </div>
     </form></Modal
   >
 </template>

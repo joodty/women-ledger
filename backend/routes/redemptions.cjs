@@ -65,6 +65,7 @@ module.exports = async function (req, res, pathname, s) {
       );
       if (
         !item ||
+        item.deleted ||
         (body.kind === "wish" && ["redeemed", "done"].includes(item.status))
       ) {
         db.exec("ROLLBACK");
@@ -81,7 +82,11 @@ module.exports = async function (req, res, pathname, s) {
           .filter((p) => p.memberId === slot && walletTag(p) === wallet)
           .reduce((n, p) => n + (Number.isFinite(p.points) ? p.points : 0), 0) -
         data.redemptions
-          .filter((r) => r.status !== "pending" && walletTag(r) === wallet)
+          .filter(
+            (r) =>
+              !["pending", "cancelled", "reversed"].includes(r.status) &&
+              walletTag(r) === wallet,
+          )
           .reduce(
             (n, r) => n + (slot === "me" ? r.fromMe || 0 : r.fromHim || 0),
             0,

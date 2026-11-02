@@ -1,4 +1,5 @@
 "use strict";
+const { fail } = require("../errors.cjs");
 /* 记一笔也发分：每条 1 分，每人每天最多 3 条。
    只对生效日之后的记录生效，避免把历史记录一次性补成一大笔分。 */
 /* 记一笔曾经发过分，2026-11-02 之后取消：奖励「记录」这个动作没有意义，
@@ -135,12 +136,21 @@ function reconcilePoints(before, after) {
         .filter((p) => p.memberId === slot && walletTag(p) === wallet)
         .reduce((n, p) => n + (Number.isFinite(p.points) ? p.points : 0), 0);
       const spent = after.redemptions
-        .filter((r) => r.status !== "pending" && walletTag(r) === wallet)
+        .filter(
+          (r) =>
+            !["pending", "cancelled", "reversed"].includes(r.status) &&
+            walletTag(r) === wallet,
+        )
         .reduce(
           (n, r) => n + (slot === "me" ? r.fromMe || 0 : r.fromHim || 0),
           0,
         );
-      if (earned < spent) throw Error("已兑换积分，无法撤回该打卡");
+      fail(
+        earned >= spent,
+        "validation",
+        "已兑换积分，请先撤销对应兑换，再删除或修改这条打卡",
+        400,
+      );
     }
 }
 module.exports = { reconcilePoints, walletTag };

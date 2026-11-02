@@ -28,7 +28,8 @@ module.exports = function ({
             (g) =>
               g.memberId === slot &&
               g.scope !== "both" &&
-              g.status === "active",
+              g.status === "active" &&
+              !g.deleted,
           ).length < 3,
           "validation",
           "最多同时保留三个个人约定",
@@ -72,6 +73,15 @@ module.exports = function ({
         "归档状态无效",
       );
       item.status = p.status;
+      break;
+    }
+    case "goal.delete": {
+      const item = find("goals");
+      own(item, slot);
+      version("goals", item);
+      // Keep the goal behind existing check-ins so deletion cannot erase earned points.
+      item.deleted = true;
+      item.status = "dropped";
       break;
     }
 

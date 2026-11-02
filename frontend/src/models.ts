@@ -80,6 +80,9 @@ export interface Points {
   entryId?: string;
 }
 export interface Redemption {
+  reverseRequestedBy?: Slot;
+  reversedBy?: Slot;
+  reversedAt?: string;
   id: string;
   memberId: Slot;
   name: string;

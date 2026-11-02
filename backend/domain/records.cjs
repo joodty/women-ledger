@@ -43,9 +43,11 @@ module.exports = function ({
       if (p.goalId)
         fail(
           g &&
-            g.status === "active" &&
-            g.joined !== false &&
-            (g.memberId === slot || g.scope === "both"),
+            (old?.goalId === g.id ||
+              (!g.deleted &&
+                g.status === "active" &&
+                g.joined !== false &&
+                (g.memberId === slot || g.scope === "both"))),
           "validation",
           "请选择有效的约定",
         );
