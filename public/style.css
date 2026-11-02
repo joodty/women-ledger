@@ -258,7 +258,7 @@ img,svg{display:block;}
 .top-gear{
   display:inline-flex;align-items:center;justify-content:center;
   width:34px;height:34px;border-radius:50%;
-  background:transparent;color:var(--ink-3);box-shadow:none;
+  background:transparent;color:var(--ink-2);box-shadow:none;
   transition:background .15s;
 }
 .top-gear svg{width:19px;height:19px;}
