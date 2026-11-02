@@ -841,7 +841,7 @@
           '<div class="brand">我们</div>' +
           '<div class="topline-date"><span>' + D.md(t) + ' ' + D.wd(t) + '</span>' +
             UI.icon('calendar', 17) + '</div>' +
-          '<button class="top-add" data-act="go" data-go="settings" aria-label="设置">' + UI.icon('gear', 18) + '</button>' +
+          '<button class="top-gear" data-act="go" data-go="settings" aria-label="设置">' + UI.icon('gear', 18) + '</button>' +
         '</div>' +
         '<div class="page-head">' +
           '<h1 class="page-title">今天，过得怎么样？</h1>' +
@@ -959,9 +959,7 @@
     }).join('');
 
     var pastCard = '<div class="card">' +
-      '<div class="card-title">一起做过的' +
-        '<button class="card-link" data-act="go" data-go="story">故事接龙' + UI.icon('right', 12) + '</button>' +
-      '</div>' +
+      '<div class="card-title">一起做过的</div>' +
       (eventRows || '<div class="empty">还什么都没做过。<br>从上面挑一件，慢慢攒。</div>') +
     '</div>';
 
@@ -1263,10 +1261,11 @@
       '<div class="card-title">故事成篇 · ' + (D.parse(month + '-01').getMonth() + 1) + ' 月' +
         '<button class="card-link" data-act="go" data-go="storyFull">查看整篇' + UI.icon('right', 12) + '</button>' +
       '</div>' +
-      '<div class="sum-row">' +
+      '<div class="sum-row" data-act="go" data-go="story" style="cursor:pointer">' +
         '<span class="sum-ico" style="background:var(--pink-soft);color:var(--pink-deep)">' + UI.icon('speech', 17) + '</span>' +
         '<span class="sum-main"><span class="sum-k">接龙 ' + storyN + ' 段</span>' +
           '<span class="sum-d">由你们一人一句，慢慢接成</span></span>' +
+        '<span class="sum-go">' + UI.icon('right', 14) + '</span>' +
       '</div>' +
       '<div class="sum-row">' +
         '<span class="sum-ico" style="background:var(--blue-soft);color:var(--blue-ink)">' + UI.icon('clock', 17) + '</span>' +
@@ -1890,8 +1889,15 @@
       { k: 'go',       n: '想去的',   icon: 'pin',   bg: 'var(--green-soft)', fg: '#5F8F58',        add: 'var(--green-soft)' }
     ];
 
+    /* 做完了就离开这张单子，去下面的「已经做过的」 */
+    function isDone(w) { return w.status === 'redeemed' || w.status === 'done'; }
+    function doneDate(w) {
+      var r = S.db.redemptions.filter(function (x) { return x.wishId === w.id; })[0];
+      return r && r.date ? D.md(r.date) : '';
+    }
+
     var html = groups.map(function (g) {
-      var list = S.db.wishlist.filter(function (w) { return w.cat === g.k; });
+      var list = S.db.wishlist.filter(function (w) { return w.cat === g.k && !isDone(w); });
       return '<div class="wish-group">' +
         '<div class="wish-group-head">' +
           '<span class="wg-ico" style="background:' + g.bg + ';color:' + g.fg + '">' + UI.icon(g.icon, 18) + '</span>' +
@@ -1908,18 +1914,34 @@
               '<span class="wi-meta">积分' + esc(w.pointsLabel) + ' · ' + esc(w.executorLabel) + '执行</span></span>' +
             '<button class="wi-edit" data-act="open-edit" data-kind="wish" data-id="' + w.id + '">' +
               UI.icon('edit', 15) + '</button>' +
-            '<button class="wi-btn ' + (w.status === 'ready' ? 'ready' : 'saving') + '" data-act="redeem" data-id="' + w.id + '">' +
-              (w.status === 'redeemed' ? '已兑换' : w.status === 'done' ? '已完成' : '去兑换') + UI.icon('right', 12) + '</button>' +
+            '<button class="wi-btn saving" data-act="redeem" data-id="' + w.id + '">去兑换' + UI.icon('right', 12) + '</button>' +
           '</div>';
         }).join('') : '<div class="empty">这一组还没有愿望。</div>') +
       '</div>';
     }).join('');
 
+    /* 已经做过的：只读，没有编辑和兑换按钮，不跟上面抢位置 */
+    var doneList = S.db.wishlist.filter(isDone);
+
+    var doneCard = doneList.length ? '<div class="card">' +
+      '<div class="card-title">已经做过的<span class="sub">' + doneList.length + ' 件</span></div>' +
+      doneList.map(function (w) {
+        return '<div class="wi-row wi-done">' +
+          '<span class="wi-ico" style="background:var(--gray-soft);color:var(--ink-3)">' +
+            UI.icon(w.icon || 'star', 19) + '</span>' +
+          '<span class="wi-main"><span class="wi-name">' + esc(w.name) + '</span>' +
+            '<span class="wi-meta">' + esc(w.pointsLabel) + ' 分 · ' + esc(w.executorLabel) +
+              (doneDate(w) ? ' · ' + doneDate(w) : '') + '</span></span>' +
+        '</div>';
+      }).join('') +
+    '</div>' : '';
+
     return sub(
       UI.subHead('设置', '愿望清单管理', '') +
-      '<div class="sub-lead">两个具体想一起做的事。</div>' +
+      '<div class="sub-lead">想一起做的事都在这儿，做完了就往下走。</div>' +
       html +
       '<button class="add-block" data-act="wish-add" data-k="together">' + UI.icon('plus', 15) + '新增愿望</button>' +
+      doneCard +
       '<div class="tip-band" style="align-items:flex-start">' + UI.icon('star', 14) +
         '<span>具体想做的事在这里加；没有对应具体愿望的行为，去奖励清单。<br>' +
         '可关联一个奖励模板，复用设置，但不重复创建。</span></div>' +

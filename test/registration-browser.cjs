@@ -8,7 +8,7 @@ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'women-register-ui-'));const base
  async function register(page,url,name){await page.goto(url);if(!url.includes('?invite='))await page.locator('.register-toggle').click();await page.locator('input[name=username]').fill(name);await page.locator('input[name=password]').fill('valid-password-123');await page.locator('form button[type=submit]').click();await page.locator('[data-act=add]:visible').first().waitFor();}
  await register(a,base,'alice');await a.locator('#sync-message').filter({hasText:'已同步'}).waitFor();
  await a.locator('#tabbar [data-nav=points]').click();await a.getByRole('heading',{name:'兑换'}).waitFor();
- await a.locator('#tabbar [data-nav=together]').click();await a.getByRole('button',{name:'故事接龙'}).click();await a.getByText('我们的故事接龙').waitFor();
+ await a.locator('#tabbar [data-nav=review]').click();await a.locator('[data-go=story]').click();await a.getByText('我们的故事接龙').waitFor();
  await a.locator('#tabbar [data-nav=today]').click();const gear=await a.getByRole('button',{name:'设置'}).boundingBox();assert.ok(gear&&gear.x>300,'mobile settings entry should be at the right edge');await a.getByRole('button',{name:'设置'}).click();await a.getByRole('heading',{name:'设置'}).waitFor();
  if(process.env.PREVIEW_SCREENSHOT){await a.locator('#tabbar [data-nav=today]').click();await a.screenshot({path:process.env.PREVIEW_SCREENSHOT});}
  const token=await a.evaluate(async()=>{const r=await fetch('/api/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});return (await r.json()).token});

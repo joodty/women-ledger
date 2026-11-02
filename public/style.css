@@ -254,6 +254,16 @@ img,svg{display:block;}
 }
 .top-add svg{width:14px;height:14px;}
 
+/* 设置入口：纯图标、灰色描边，不抢视线、不做按钮感 */
+.top-gear{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:50%;
+  background:transparent;color:var(--ink-3);box-shadow:none;
+  transition:background .15s;
+}
+.top-gear svg{width:19px;height:19px;}
+.top-gear:active{background:var(--gray-soft);color:var(--ink-2);}
+
 /* ---------------- 积分池 ---------------- */
 .pool{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
 .pool-cell{
@@ -668,6 +678,10 @@ img,svg{display:block;}
 .wi-btn svg{width:12px;height:12px;}
 .wi-btn.ready{background:var(--pink-soft);color:var(--pink-ink);}
 .wi-btn.saving{background:var(--gray-soft);color:var(--ink-2);}
+/* 已做过的：整行退到后面，不做成可点的样子 */
+.wi-done .wi-name{color:var(--ink-2);font-weight:400;}
+.wi-done .wi-meta{color:var(--ink-4);}
+.sum-go{display:flex;align-items:center;color:var(--ink-4);margin-left:auto;}
 
 /* ---------------- 底部弹层（记一笔） ---------------- */
 .sheet-mask{
