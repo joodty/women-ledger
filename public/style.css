@@ -340,6 +340,14 @@ img,svg{display:block;}
 }
 .wish-btn.saving{background:var(--gray-soft);color:var(--ink-2);}
 .wish-btn.done{background:var(--green-soft);color:#5F8F58;}
+/* 兑换页：想做的事 + 进度 */
+.task-top{display:flex;align-items:center;gap:8px;}
+.task-top .wish-name{flex:1;min-width:0;}
+.task-who{font-size:11px;color:var(--ink-3);background:var(--gray-soft);padding:2px 7px;border-radius:8px;flex:0 0 auto;}
+.task-gap{font-size:12px;color:var(--ink-3);white-space:nowrap;flex:0 0 auto;}
+.task-gap.off{color:var(--ink-4);}
+.task-bar{height:3px;border-radius:2px;background:var(--line-2);margin-top:8px;overflow:hidden;}
+.task-bar i{display:block;height:3px;border-radius:2px;}
 
 /* ---------------- 故事接龙卡 ---------------- */
 .story-card{background:var(--pink-soft);border-radius:18px;padding:14px;}

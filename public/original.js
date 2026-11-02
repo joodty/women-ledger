@@ -960,7 +960,9 @@
     }).join('');
 
     var pastCard = '<div class="card">' +
-      '<div class="card-title">一起做过的</div>' +
+      '<div class="card-title">一起做过的' +
+        '<button class="card-link" data-act="go" data-go="past">全部' + UI.icon('right', 12) + '</button>' +
+      '</div>' +
       (eventRows || '<div class="empty">还什么都没做过。<br>从上面挑一件，慢慢攒。</div>') +
     '</div>';
 
@@ -996,9 +998,6 @@
   global.Wish = { cost: wishCost, costText: wishCostText, wallet: wishWallet, check: wishCheck, rank: wishRank };
 
   Pages.points = function (st) {
-    var list = openWishes();
-    var able = list.filter(function (w) { return wishCheck(w).ok; });
-
     /* 两个钱包：我们的分（共同）／我的分（个人） */
     var balCard = '<div class="card">' +
       '<div class="pool" style="grid-template-columns:1fr 1fr">' +
@@ -1029,48 +1028,48 @@
       ? '<div class="card"><div class="card-title">兑换申请<span class="sub">两个人都点头才扣分</span></div>' + asks + '</div>'
       : '';
 
-    /* 现在能兑的 */
-    var ableRows = able.slice(0, 3).map(function (w) {
+    /* 全部想做的事：能兑的永远在最上面，后面按「还差多少」从少到多 */
+    function taskOf(w) {
+      var chk = wishCheck(w);
+      if (w.scope === 'him') return { rank: 4e6, kind: 'his', text: '他来兑', pct: 0 };
+      if (chk.reason === 'nocost') return { rank: 3e6, kind: 'nocost', text: '没定分值', pct: 0 };
+      if (chk.reason === 'odd') return { rank: 2e6, kind: 'odd', text: '要偶数分', pct: 0 };
+      var pay = chk.pay > 0 ? chk.pay : 1;
+      if (chk.ok) return { rank: 0, kind: 'ok', text: '去兑换', pct: 100 };
+      return {
+        rank: 1e6 + chk.gap, kind: 'gap', text: '还差 ' + chk.gap + ' 分',
+        pct: Math.max(0, Math.min(99, Math.round((pay - chk.gap) / pay * 100)))
+      };
+    }
+
+    var tasks = openWishes().map(function (w) { return { w: w, t: taskOf(w) }; })
+      .sort(function (a, b) { return a.t.rank - b.t.rank; });
+
+    var taskRows = tasks.map(function (x) {
+      var w = x.w, t = x.t;
       var c = S.cat(w.cat === 'together' ? 'relate' : w.cat === 'eat' ? 'life' : 'leisure');
-      var pay = wishCheck(w).pay;
+      var whoTag = w.scope === 'both' ? '' :
+        '<span class="task-who">' + (w.scope === 'him' ? '他的' : '我的') + '</span>';
+      var right = t.kind === 'ok'
+        ? (wishWallet(w) === 'ours' ? '<span class="task-gap">各出 ' + wishCheck(w).pay + '</span>' : '') +
+          '<button class="wish-btn" data-act="confirm-redeem" data-id="' + w.id + '">去兑换</button>'
+        : '<span class="task-gap' + (t.kind === 'his' ? ' off' : '') + '">' + t.text + '</span>';
+      var bar = (t.kind === 'ok' || t.kind === 'his') ? '' :
+        '<div class="task-bar"><i style="width:' + t.pct + '%;background:' + c.color + '"></i></div>';
       return '<div class="wish-item">' +
         '<span class="wish-ico" style="background:' + UI.rgba(c.color, .18) + ';color:' + UI.shade(c.color) + '">' +
           UI.icon(w.icon || 'star', 19) + '</span>' +
         '<span class="wish-main">' +
-          '<span class="wish-name">' + esc(w.name || '还没起名') + '</span>' +
-          '<span class="wish-meta">' + wishCostText(w) + ' · ' +
-            (wishWallet(w) === 'mine' ? '从我的分扣' : '各出 ' + pay + ' 分') + '</span>' +
+          '<span class="task-top"><span class="wish-name">' + esc(w.name || '还没起名') + '</span>' +
+            whoTag + right + '</span>' +
+          bar +
         '</span>' +
-        '<button class="wish-btn" data-act="confirm-redeem" data-id="' + w.id + '">去兑换</button>' +
       '</div>';
     }).join('');
 
-    /* 一条都兑不了时，只报卡在哪里 */
-    var blocker = null;
-    for (var i = 0; i < list.length; i++) {
-      var c0 = wishCheck(list[i]);
-      if (!c0.ok && c0.reason !== 'his') { blocker = list[i]; break; }
-    }
-    var gapText;
-    if (!list.length) {
-      gapText = '还没有想做的事。<br>去「一起」加一个，再来这里兑。';
-    } else if (blocker) {
-      var chk = wishCheck(blocker);
-      var nm = esc(blocker.name || '还没起名');
-      if (chk.reason === 'nocost') {
-        gapText = '「' + nm + '」还没定分值。<br>去「一起」给它填一个数。';
-      } else if (chk.reason === 'odd') {
-        gapText = '「' + nm + '」的分值是奇数。<br>两个人的兑换要能被 2 整除，改成偶数就行。';
-      } else {
-        gapText = '还差 <b>' + Math.max(0, chk.gap) + '</b> 分，「' + nm + '」就能兑。';
-      }
-    } else {
-      gapText = '能兑的都在上面了。';
-    }
-
-    var ableCard = '<div class="card">' +
-      '<div class="card-title">现在能兑的</div>' +
-      (ableRows || '<div class="empty">' + gapText + '</div>') +
+    var taskCard = '<div class="card">' +
+      '<div class="card-title">想做的事</div>' +
+      (taskRows || '<div class="empty">还没有想做的事。<br>去「一起」加一个，再来这里兑。</div>') +
     '</div>';
 
     /* 兑换记录：一行一条，不展开 */
@@ -1099,7 +1098,7 @@
         '<h1 class="page-title">兑换</h1>' +
         '<p class="page-sub">攒够分，就把想做的事做掉。</p>' +
       '</div>' +
-      balCard + askCard + ableCard + recordCard,
+      balCard + askCard + taskCard + recordCard,
       true
     );
   };
@@ -1242,43 +1241,6 @@
       lowList +
     '</div>';
 
-    /* ----- 时间线 ----- */
-    var ms = S.db.milestones.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 5);
-    var tline = ms.map(function (m) {
-      var cls = m.kind === 'wish' ? 'him' : '';
-      return '<div class="tline-item ' + cls + '">' +
-        '<div class="tline-date">' + D.md(m.date) + '<span class="wd">' + D.wd(m.date) + '</span></div>' +
-        '<div class="tline-text">' + esc(m.title) + '</div>' +
-      '</div>';
-    }).join('');
-
-    var tlineCard = '<div class="card">' +
-      '<div class="card-title">我们的时间线' +
-        '<button class="card-link" data-act="go" data-go="meet">见面安排' + UI.icon('right', 12) + '</button>' +
-      '</div>' +
-      (ms.length ? '<div class="tline">' + tline + '</div>' : '<div class="empty">还没有节点。</div>') +
-    '</div>';
-
-    /* ----- 故事成篇（数字拆两行） ----- */
-    var storyN = S.db.story_entries.length;
-    var nodeN = S.db.milestones.filter(function (m) { return m.kind !== 'meet'; }).length;
-    var storyCard = '<div class="card">' +
-      '<div class="card-title">故事成篇 · ' + (D.parse(month + '-01').getMonth() + 1) + ' 月' +
-        '<button class="card-link" data-act="go" data-go="storyFull">查看整篇' + UI.icon('right', 12) + '</button>' +
-      '</div>' +
-      '<div class="sum-row" data-act="go" data-go="story" style="cursor:pointer">' +
-        '<span class="sum-ico" style="background:var(--pink-soft);color:var(--pink-deep)">' + UI.icon('speech', 17) + '</span>' +
-        '<span class="sum-main"><span class="sum-k">接龙 ' + storyN + ' 段</span>' +
-          '<span class="sum-d">由你们一人一句，慢慢接成</span></span>' +
-        '<span class="sum-go">' + UI.icon('right', 14) + '</span>' +
-      '</div>' +
-      '<div class="sum-row">' +
-        '<span class="sum-ico" style="background:var(--blue-soft);color:var(--blue-ink)">' + UI.icon('clock', 17) + '</span>' +
-        '<span class="sum-main"><span class="sum-k">时间线 ' + nodeN + ' 个节点</span>' +
-          '<span class="sum-d">记录这个月重要的几次时刻</span></span>' +
-      '</div>' +
-    '</div>';
-
     return page(
       '<div class="topline">' +
         '<div class="brand">我们</div>' +
@@ -1288,7 +1250,7 @@
         '<h1 class="page-title">回看</h1>' +
         '<p class="page-sub">没有记录的日子也没关系。</p>' +
       '</div>' +
-      calCard + dayCard + distCard + happyCard + tlineCard + storyCard + DEMO,
+      calCard + dayCard + distCard + happyCard + DEMO,
       true
     );
   };
@@ -1883,6 +1845,78 @@
       '<div class="foot-line">第三人称：她和他，才连得成一篇。</div>'
     );
   };
+
+  /* ============================================================
+     做过的（一起页第三段点进来）：完整时间线 + 我们的故事
+     ============================================================ */
+  Pages.past = function () {
+    var today = D.today();
+    var items = [];
+
+    S.db.milestones.forEach(function (m) {
+      items.push({
+        date: m.date, title: m.title || m.note || '记了一笔',
+        ico: m.kind === 'meet' ? 'users' : m.kind === 'goal' ? 'target' : 'heart'
+      });
+    });
+    S.db.redemptions.forEach(function (r) {
+      if (r.status === 'pending' || r.status === 'cancelled' || r.wallet !== 'ours') return;
+      items.push({ date: r.date, title: r.name || '兑换', ico: 'gift' });
+    });
+    items.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+
+    var next = items.filter(function (x) { return x.date > today; }).reverse();
+    var done = items.filter(function (x) { return x.date <= today; });
+
+    function row(x) {
+      return '<div class="tline-item">' +
+        '<div class="tline-date">' + D.md(x.date) + '<span class="wd">' + D.wd(x.date) + '</span></div>' +
+        '<div class="tline-text">' + esc(x.title) + '</div>' +
+      '</div>';
+    }
+
+    var meetBtn = '<button class="add-block" data-act="go" data-go="meet">' +
+      UI.icon('plus', 15) + '安排下次见面</button>';
+
+    var nextCard = '<div class="card">' +
+      '<div class="card-title">还没到的' + (next.length ? '<span class="sub">' + next.length + ' 个</span>' : '') + '</div>' +
+      (next.length ? '<div class="tline">' + next.map(row).join('') + '</div>'
+        : '<div class="empty">还没安排下次见面。</div>') +
+      meetBtn +
+    '</div>';
+
+    var doneCard = '<div class="card">' +
+      '<div class="card-title">时间线<span class="sub">' + done.length + ' 个节点</span></div>' +
+      (done.length ? '<div class="tline">' + done.map(row).join('') + '</div>'
+        : '<div class="empty">还什么都没做过。<br>从想做的事里挑一件，慢慢攒。</div>') +
+    '</div>';
+
+    /* 故事接龙暂放在这一页的末尾：它属于「我们一起造的东西」，不属于回看 */
+    var storyN = S.db.story_entries.length;
+    var storyCard = '<div class="card">' +
+      '<div class="card-title">我们的故事<span class="sub">' + storyN + ' 段</span>' +
+        (storyN ? '<button class="card-link" data-act="go" data-go="storyFull">查看整篇' + UI.icon('right', 12) + '</button>' : '') +
+      '</div>' +
+      '<div class="sum-row" data-act="go" data-go="story" style="cursor:pointer">' +
+        '<span class="sum-ico" style="background:var(--pink-soft);color:var(--pink-deep)">' + UI.icon('speech', 17) + '</span>' +
+        '<span class="sum-main">' +
+          '<span class="sum-k">' + (storyN ? '接龙 ' + storyN + ' 段' : '还没开始') + '</span>' +
+          '<span class="sum-d">' + (storyN ? '一人一句，接着往下写' : '谁先写第一句都行') + '</span>' +
+        '</span>' +
+        '<span class="sum-go">' + UI.icon('right', 14) + '</span>' +
+      '</div>' +
+      '<button class="add-block" data-act="go" data-go="story">' +
+        UI.icon('plus', 15) + (storyN ? '接着写一段' : '写第一句') + '</button>' +
+    '</div>';
+
+    return sub(
+      UI.subHead('一起', '做过的', '') +
+      '<div class="sub-lead">一起做成的、去过的、见面的，都在这里。</div>' +
+      nextCard + doneCard + storyCard +
+      DEMO
+    );
+  };
+
 
   /* ============================================================
      ⑭ 愿望清单管理
