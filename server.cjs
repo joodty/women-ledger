@@ -110,6 +110,7 @@ function onlyJoined(base,requested){
  const m=new Map(requested.map(x=>[x.id,x]));
  for(const x of base){
   const y=m.get(x.id);
+  if(y&&equal(x,y))continue;
   if(!y||x.id!==y.id||x.scope!=='both'||x.joined!==false||y.joined!==true)return false;
   const keys=new Set([...Object.keys(x),...Object.keys(y)]);
   for(const k of keys){if(k==='joined')continue;if(!equal(x[k],y[k]))return false;}
