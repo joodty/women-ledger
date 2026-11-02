@@ -1,17 +1,285 @@
-'use strict';
-const {spawn,spawnSync}=require('node:child_process');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const assert=require('node:assert/strict');
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),'women-test-'));const apk=path.join(dir,'release.apk');fs.writeFileSync(apk,Buffer.from([1,2,3])); const env={...process.env,WOMEN_DATA_DIR:dir,WOMEN_APK_PATH:apk,PORT:'18764'};
-const init=spawnSync(process.execPath,['-e',"process.env.WOMEN_DATA_DIR=process.argv[1];process.argv[2]='setup';require('./server.cjs')",dir],{cwd:__dirname+'\\..',env,input:'',encoding:'utf8'}); const {DatabaseSync}=require('node:sqlite');const crypto=require('node:crypto');const d=new DatabaseSync(path.join(dir,'ledger.sqlite'));for(const [id,p] of [['me','password-one-123'],['him','password-two-456']]){const salt=crypto.randomBytes(16);d.prepare('INSERT INTO users VALUES(?,?,?)').run(id,salt,crypto.scryptSync(p,salt,64));}d.close();
-let child=spawn(process.execPath,['server.cjs'],{cwd:__dirname+'\\..',env,stdio:'pipe'});const base='http://127.0.0.1:18764';
-async function request(p,{method='GET',cookie,body,origin=base}={}){const r=await fetch(base+p,{method,headers:{...(method==='POST'?{Origin:origin,'Content-Type':'application/json'}:{}),...(cookie?{Cookie:cookie}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,cookie:r.headers.get('set-cookie')?.split(';')[0],json:await r.json()}}
-(async()=>{try{for(let i=0;i<80;i++){try{await fetch(base);break}catch{await new Promise(r=>setTimeout(r,100))}};
- const versionResponse=await fetch(base+'/app-version.json');assert.equal(versionResponse.status,200);const versionInfo=await versionResponse.json();const manifest=fs.readFileSync(path.join(__dirname,'..','android','AndroidManifest.xml'),'utf8');assert.equal(Number(manifest.match(/android:versionCode="(\d+)"/)[1]),versionInfo.versionCode);assert.equal(manifest.match(/android:versionName="([^"]+)"/)[1],versionInfo.versionName);assert.equal((await fetch(base+versionInfo.downloadPath)).status,200);fs.renameSync(apk,apk+'.absent');try{assert.equal((await fetch(base+'/app-version.json')).status,503,'do not force an update if APK is missing')}finally{fs.renameSync(apk+'.absent',apk)}
- const download=await fetch(base+'/download/women-ledger-0.2.0.apk');assert.equal(download.status,200);assert.match(download.headers.get('content-type'),/application\/vnd.android.package-archive/);assert.deepEqual([...new Uint8Array(await download.arrayBuffer())],[1,2,3]);assert.equal((await fetch(base+'/download/women-ledger-0.2.0.apk',{method:'HEAD'})).headers.get('content-length'),'3');
- assert.equal((await request('/api/state')).status,401);assert.equal((await request('/api/login',{method:'POST',body:{user:'me',password:'bad'}})).status,401);assert.equal((await request('/api/login',{method:'POST',origin:'https://evil.test',body:{user:'me',password:'password-one-123'}})).status,403);
- const a=await request('/api/login',{method:'POST',body:{user:'me',password:'password-one-123'}}),b=await request('/api/login',{method:'POST',body:{user:'him',password:'password-two-456'}});assert.equal(a.status,200);assert.equal(b.status,200);
- const state={version:4,couple:{since:'2026-01-01'},members:[{id:'me',name:'a'},{id:'him',name:'b'}],categories:[{id:'none',name:'未分类',color:'#D8D5D2'}],entries:[],goals:[],weekly_settlements:[],points_ledger:[],rewards:[],wishlist:[],story_entries:[],milestones:[],redemptions:[],sparks:[]};
- assert.equal((await request('/api/state',{method:'POST',cookie:a.cookie,body:{revision:0,data:state}})).json.revision,1);const bRead=await request('/api/state',{cookie:b.cookie});assert.equal(bRead.json.revision,1);state.entries.push({id:'test',memberId:'me',date:'2026-01-01',start:'10:00',end:'11:00',content:'test'});assert.equal((await request('/api/state',{method:'POST',cookie:a.cookie,body:{revision:1,data:state}})).json.revision,2);const conflicting=structuredClone(state);conflicting.entries[0].content='different content';assert.equal((await request('/api/state',{method:'POST',cookie:b.cookie,body:{revision:1,data:conflicting}})).status,409);assert.equal((await request('/api/state',{cookie:b.cookie})).json.data.entries[0].id,'test');const hist=await request('/api/history',{cookie:b.cookie});assert.equal(hist.json.items.length,1);assert.equal((await request('/api/history/'+hist.json.items[0].id,{cookie:b.cookie})).json.data.entries.length,0);const backupPath=path.join(dir,'backup.sqlite');const backed=spawnSync(process.execPath,['server.cjs','backup',backupPath],{cwd:__dirname+'\\..',env,encoding:'utf8'});assert.equal(backed.status,0,backed.stderr);const copy=new DatabaseSync(backupPath,{readOnly:true});assert.equal(JSON.parse(copy.prepare('SELECT json FROM state WHERE id=1').get().json).entries[0].id,'test');copy.close();assert.equal((await request('/api/logout',{method:'POST',cookie:a.cookie,body:{}})).status,200);assert.equal((await request('/api/state',{cookie:a.cookie})).status,401);await new Promise(resolve=>{child.once('exit',resolve);child.kill()});child=spawn(process.execPath,['server.cjs'],{cwd:__dirname+'\\..',env,stdio:'pipe'});let restarted=false;for(let i=0;i<80;i++){try{const v=await request('/api/state',{cookie:b.cookie});assert.equal(v.json.data.entries[0].id,'test');restarted=true;break}catch{await new Promise(r=>setTimeout(r,100))}}assert.ok(restarted);console.log('PASS: login, auth, origin, shared storage, conflict, backup, restart and logout');
- }finally{child.kill();setTimeout(()=>fs.rmSync(dir,{recursive:true,force:true}),500)}})().catch(e=>{console.error(e);process.exitCode=1});
-
-
-
+"use strict";
+const { spawn, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const assert = require("node:assert/strict");
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "women-test-"));
+const apk = path.join(dir, "release.apk");
+fs.writeFileSync(apk, Buffer.from([1, 2, 3]));
+const env = {
+  ...process.env,
+  WOMEN_DATA_DIR: dir,
+  WOMEN_APK_PATH: apk,
+  PORT: "18764",
+};
+const init = spawnSync(
+  process.execPath,
+  [
+    "-e",
+    "process.env.WOMEN_DATA_DIR=process.argv[1];process.argv[2]='setup';require('./server.cjs')",
+    dir,
+  ],
+  { cwd: path.join(__dirname, ".."), env, input: "", encoding: "utf8" },
+);
+const { DatabaseSync } = require("node:sqlite");
+const crypto = require("node:crypto");
+const d = new DatabaseSync(path.join(dir, "ledger.sqlite"));
+for (const [id, p] of [
+  ["me", "password-one-123"],
+  ["him", "password-two-456"],
+]) {
+  const salt = crypto.randomBytes(16);
+  d.prepare("INSERT INTO users VALUES(?,?,?)").run(
+    id,
+    salt,
+    crypto.scryptSync(p, salt, 64),
+  );
+}
+d.close();
+let child = spawn(process.execPath, ["server.cjs"], {
+  cwd: path.join(__dirname, ".."),
+  env,
+  stdio: "pipe",
+});
+const base = "http://127.0.0.1:18764";
+async function request(
+  p,
+  { method = "GET", cookie, body, origin = base } = {},
+) {
+  const r = await fetch(base + p, {
+    method,
+    headers: {
+      ...(method === "POST"
+        ? { Origin: origin, "Content-Type": "application/json" }
+        : {}),
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  return {
+    status: r.status,
+    cookie: r.headers.get("set-cookie")?.split(";")[0],
+    json: await r.json(),
+  };
+}
+(async () => {
+  try {
+    for (let i = 0; i < 80; i++) {
+      try {
+        await fetch(base);
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+    const versionResponse = await fetch(base + "/app-version.json");
+    assert.equal(versionResponse.status, 200);
+    const versionInfo = await versionResponse.json();
+    const manifest = fs.readFileSync(
+      path.join(__dirname, "..", "android", "AndroidManifest.xml"),
+      "utf8",
+    );
+    assert.equal(
+      Number(manifest.match(/android:versionCode="(\d+)"/)[1]),
+      versionInfo.versionCode,
+    );
+    assert.equal(
+      manifest.match(/android:versionName="([^"]+)"/)[1],
+      versionInfo.versionName,
+    );
+    assert.equal((await fetch(base + versionInfo.downloadPath)).status, 200);
+    fs.renameSync(apk, apk + ".absent");
+    try {
+      assert.equal(
+        (await fetch(base + "/app-version.json")).status,
+        503,
+        "do not force an update if APK is missing",
+      );
+    } finally {
+      fs.renameSync(apk + ".absent", apk);
+    }
+    const download = await fetch(base + "/download/women-ledger-0.2.0.apk");
+    assert.equal(download.status, 200);
+    assert.match(
+      download.headers.get("content-type"),
+      /application\/vnd.android.package-archive/,
+    );
+    assert.deepEqual(
+      [...new Uint8Array(await download.arrayBuffer())],
+      [1, 2, 3],
+    );
+    assert.equal(
+      (
+        await fetch(base + "/download/women-ledger-0.2.0.apk", {
+          method: "HEAD",
+        })
+      ).headers.get("content-length"),
+      "3",
+    );
+    assert.equal((await request("/api/state")).status, 401);
+    assert.equal(
+      (
+        await request("/api/login", {
+          method: "POST",
+          body: { user: "me", password: "bad" },
+        })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (
+        await request("/api/login", {
+          method: "POST",
+          origin: "https://evil.test",
+          body: { user: "me", password: "password-one-123" },
+        })
+      ).status,
+      403,
+    );
+    const a = await request("/api/login", {
+        method: "POST",
+        body: { user: "me", password: "password-one-123" },
+      }),
+      b = await request("/api/login", {
+        method: "POST",
+        body: { user: "him", password: "password-two-456" },
+      });
+    assert.equal(a.status, 200);
+    assert.equal(b.status, 200);
+    const state = {
+      version: 4,
+      couple: { since: "2026-01-01" },
+      members: [
+        { id: "me", name: "a" },
+        { id: "him", name: "b" },
+      ],
+      categories: [{ id: "none", name: "未分类", color: "#D8D5D2" }],
+      entries: [],
+      goals: [],
+      weekly_settlements: [],
+      points_ledger: [],
+      rewards: [],
+      wishlist: [],
+      story_entries: [],
+      milestones: [],
+      redemptions: [],
+      sparks: [],
+    };
+    assert.equal(
+      (
+        await request("/api/state", {
+          method: "POST",
+          cookie: a.cookie,
+          body: { revision: 0, data: state },
+        })
+      ).json.revision,
+      1,
+    );
+    const bRead = await request("/api/state", { cookie: b.cookie });
+    assert.equal(bRead.json.revision, 1);
+    state.entries.push({
+      id: "test",
+      memberId: "me",
+      date: "2026-01-01",
+      start: "10:00",
+      end: "11:00",
+      content: "test",
+    });
+    assert.equal(
+      (
+        await request("/api/state", {
+          method: "POST",
+          cookie: a.cookie,
+          body: { revision: 1, data: state },
+        })
+      ).json.revision,
+      2,
+    );
+    const conflicting = structuredClone(state);
+    conflicting.entries[0].content = "different content";
+    assert.equal(
+      (
+        await request("/api/state", {
+          method: "POST",
+          cookie: b.cookie,
+          body: { revision: 1, data: conflicting },
+        })
+      ).status,
+      409,
+    );
+    assert.equal(
+      (await request("/api/state", { cookie: b.cookie })).json.data.entries[0]
+        .id,
+      "test",
+    );
+    const hist = await request("/api/history", { cookie: b.cookie });
+    assert.equal(hist.json.items.length, 1);
+    assert.equal(
+      (
+        await request("/api/history/" + hist.json.items[0].id, {
+          cookie: b.cookie,
+        })
+      ).json.data.entries.length,
+      0,
+    );
+    const backupPath = path.join(dir, "backup.sqlite");
+    const backed = spawnSync(
+      process.execPath,
+      ["server.cjs", "backup", backupPath],
+      { cwd: path.join(__dirname, ".."), env, encoding: "utf8" },
+    );
+    assert.equal(backed.status, 0, backed.stderr);
+    const copy = new DatabaseSync(backupPath, { readOnly: true });
+    assert.equal(
+      JSON.parse(copy.prepare("SELECT json FROM state WHERE id=1").get().json)
+        .entries[0].id,
+      "test",
+    );
+    copy.close();
+    assert.equal(
+      (
+        await request("/api/logout", {
+          method: "POST",
+          cookie: a.cookie,
+          body: {},
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await request("/api/state", { cookie: a.cookie })).status,
+      401,
+    );
+    await new Promise((resolve) => {
+      child.once("exit", resolve);
+      child.kill();
+    });
+    child = spawn(process.execPath, ["server.cjs"], {
+      cwd: path.join(__dirname, ".."),
+      env,
+      stdio: "pipe",
+    });
+    let restarted = false;
+    for (let i = 0; i < 80; i++) {
+      try {
+        const v = await request("/api/state", { cookie: b.cookie });
+        assert.equal(v.json.data.entries[0].id, "test");
+        restarted = true;
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+    assert.ok(restarted);
+    console.log(
+      "PASS: login, auth, origin, shared storage, conflict, backup, restart and logout",
+    );
+  } finally {
+    child.kill();
+    setTimeout(() => fs.rmSync(dir, { recursive: true, force: true }), 500);
+  }
+})().catch((e) => {
+  console.error(e);
+  process.exitCode = 1;
+});

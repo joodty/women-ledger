@@ -36,6 +36,7 @@ public final class MainActivity extends Activity {
     private WebMessagePort reminderPort;
     private PermissionRequest microphoneRequest;
     private AppUpdates appUpdates;
+    private DocumentExports documentExports;
 
     private boolean allowed(Uri uri) {
         return uri != null && "https".equalsIgnoreCase(uri.getScheme())
@@ -49,6 +50,7 @@ public final class MainActivity extends Activity {
         getWindow().setNavigationBarColor(0xfffaf8f5);
         getWindow().getDecorView().setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         web = new WebView(this); setContentView(web);
+        documentExports=new DocumentExports(this);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false); settings.setAllowContentAccess(true);
@@ -104,6 +106,7 @@ public final class MainActivity extends Activity {
                 if("sync".equals(type)){org.json.JSONArray items=payload.optJSONArray("reminders");if(!ReminderStore.replace(MainActivity.this,payload.optString("account"),items))Toast.makeText(MainActivity.this,"提醒设置无效，请重新保存",Toast.LENGTH_LONG).show();else if(items!=null&&items.length()>0&&Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED&&!getSharedPreferences("reminder_permissions",MODE_PRIVATE).getBoolean("asked",false)){getSharedPreferences("reminder_permissions",MODE_PRIVATE).edit().putBoolean("asked",true).apply();requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_PERMISSION);}}
                 else if("clear".equals(type)){ReminderStore.clear(MainActivity.this,payload.optString("account"));String id=payload.optString("requestId");if(!id.isEmpty())port.postMessage(new WebMessage(new JSONObject().put("requestId",id).toString()));}
                 else if("request-permission".equals(type))requestReminderPermissions();
+                else if(type.startsWith("export-"))documentExports.message(port,payload);
             }catch(Exception ignored){Toast.makeText(MainActivity.this,"提醒设置未能同步",Toast.LENGTH_LONG).show();}
         }});
         view.postWebMessage(new WebMessage("women-reminders-v1",new WebMessagePort[]{ports[1]}),Uri.parse("https://tn.yidiangames.cn"));
@@ -119,9 +122,10 @@ public final class MainActivity extends Activity {
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==MICROPHONE_PERMISSION){PermissionRequest pending=microphoneRequest;microphoneRequest=null;if(pending!=null){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED&&allowed(Uri.parse(web.getUrl()==null?"":web.getUrl())))pending.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});else pending.deny();}return;}if(request==NOTIFICATION_PERMISSION){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)requestExactAlarm();else Toast.makeText(this,"请在系统设置中允许通知，否则无法收到提醒",Toast.LENGTH_LONG).show();}}
     @Override protected void onResume(){super.onResume();ReminderStore.scheduleAll(this);if(appUpdates!=null)appUpdates.onResume();}
-    @Override protected void onDestroy(){if(appUpdates!=null)appUpdates.close();if(reminderPort!=null){reminderPort.close();reminderPort=null;}super.onDestroy();}
+    @Override protected void onDestroy(){if(documentExports!=null)documentExports.clear();if(appUpdates!=null)appUpdates.close();if(reminderPort!=null){reminderPort.close();reminderPort=null;}super.onDestroy();}
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request,result,data);
+        if(request==DocumentExports.SAVE_DOCUMENT){documentExports.result(result,data);return;}
         if (request == PICK_FILE && fileCallback != null) { fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data)); fileCallback=null; }
     }
     @Override public void onBackPressed() { if (web.canGoBack()) web.goBack(); else super.onBackPressed(); }

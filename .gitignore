@@ -15,3 +15,11 @@ test/tablet.cjs
 *.pub
 credentials*
 
+
+dist/
+artifacts/
+*.tgz
+*.tar.gz
+playwright-report/
+test-results/
+

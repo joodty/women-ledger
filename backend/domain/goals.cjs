@@ -1,0 +1,82 @@
+"use strict";
+const { fail } = require("../errors.cjs");
+const {
+  today,
+  text,
+  id,
+  date,
+  own,
+  visibility,
+  goalFields,
+} = require("./validation.cjs");
+module.exports = function ({
+  data,
+  p,
+  type,
+  slot,
+  session,
+  find,
+  version,
+  create,
+}) {
+  switch (type) {
+    case "goal.create": {
+      const fields = goalFields(p);
+      if (fields.scope !== "both")
+        fail(
+          data.goals.filter(
+            (g) =>
+              g.memberId === slot &&
+              g.scope !== "both" &&
+              g.status === "active",
+          ).length < 3,
+          "validation",
+          "最多同时保留三个个人约定",
+        );
+      create("goals", {
+        id: id(p.id),
+        memberId: slot,
+        ...fields,
+        status: "active",
+        joined: fields.scope !== "both",
+      });
+      break;
+    }
+    case "goal.update": {
+      const item = find("goals");
+      own(item, slot);
+      version("goals", item);
+      Object.assign(item, goalFields(p));
+      break;
+    }
+    case "goal.join": {
+      const item = find("goals");
+      fail(
+        item.scope === "both" &&
+          item.visibility !== "private" &&
+          item.memberId !== slot,
+        "forbidden",
+        "这条约定不需要你加入",
+        403,
+      );
+      item.joined = true;
+      break;
+    }
+    case "goal.archive": {
+      const item = find("goals");
+      own(item, slot);
+      version("goals", item);
+      fail(
+        ["done", "dropped"].includes(p.status),
+        "validation",
+        "归档状态无效",
+      );
+      item.status = p.status;
+      break;
+    }
+
+    default:
+      return false;
+  }
+  return true;
+};
