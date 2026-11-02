@@ -40,12 +40,30 @@ const registrations=new Map();
 const secure=process.env.WOMEN_SECURE_COOKIE==='1';
 const port=Number(process.env.PORT||18763), host=process.env.HOST||'127.0.0.1';
 const publicDir=path.join(__dirname,'public');
-const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/sync.js':'sync.js','/original.js':'original.js'};
+const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/sync.js':'sync.js','/original.js':'original.js','/speech.js':'speech.js'};
 function send(res,status,obj,headers={}) {const body=JSON.stringify(obj);res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers});res.end(body);}
 function cookie(req) { const match=(req.headers.cookie||'').match(/(?:^|;\s*)women_session=([a-f0-9]{64})(?:;|$)/);return match&&match[1]; }
 function session(req) {const t=cookie(req);if(!t)return null;return db.prepare('SELECT s.user_id,s.expires,m.space_id,m.slot FROM sessions s JOIN space_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires>?').get(sha(t),Date.now());}
 function sameOrigin(req) { const origin=req.headers.origin; if(!origin)return false;try{return new URL(origin).host === req.headers.host && ['http:','https:'].includes(new URL(origin).protocol);}catch{return false;} }
-function getBody(req) {return new Promise((resolve,reject)=>{let size=0,chunks=[];req.on('data',chunk=>{size+=chunk.length;if(size>2*1024*1024){reject(Error('内容超过 2MB'));req.destroy();}else chunks.push(chunk)});req.on('end',()=>{try{resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))}catch{reject(Error('无效 JSON'))}});req.on('error',reject)});}
+function getBody(req,limit=2*1024*1024) {return new Promise((resolve,reject)=>{let size=0,chunks=[];req.on('data',chunk=>{size+=chunk.length;if(size>limit){reject(Error('请求内容过大'));req.destroy();}else chunks.push(chunk)});req.on('end',()=>{try{resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))}catch{reject(Error('无效 JSON'))}});req.on('error',reject)});}
+const speechService=(()=>{
+const fs=require('fs'),crypto=require('crypto'),path=require('path');
+const base=process.env.WOMEN_DSH_BASE||'https://dsh.yidiangames.cn';
+const cookieFile=process.env.WOMEN_DSH_COOKIE_FILE||path.join(process.env.WOMEN_DATA_DIR||path.join(__dirname,'data'),'dsh-speech-cookie.txt');
+let busy=false;
+async function rpc(method,args,timeout=20000){
+ const cookie=fs.readFileSync(cookieFile,'utf8').trim();if(!/^dsh_[a-z_]+=[A-Za-z0-9._~-]+$/.test(cookie))throw Error('语音服务尚未配置');
+ const rpcId=crypto.randomUUID();const r=await fetch(base+'/remote/api/'+method,{method:'POST',headers:{'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify({type:'client-request',rpcId,method,payload:{args}}),signal:AbortSignal.timeout(timeout)});
+ if(!r.ok)throw Error('语音服务暂不可用');const data=await r.json();if(data.rpcId!==rpcId||!data.result?.ok)throw Error('语音服务暂不可用');return data.result.value;
+}
+async function config(){const c=await rpc('speech/catalog',{});const seconds=Math.min(180,Math.floor(Number(c.maxDurationSeconds)),Math.floor((Number(c.maxAudioBytes)-44)/32000));if(!Number.isFinite(seconds)||seconds<1)throw Error('语音服务限制无效');return {maxSeconds:seconds,maxBytes:Math.min(Number(c.maxAudioBytes),44+seconds*32000)};}
+async function transcribe(audio){if(busy){const e=Error('语音服务正忙，请稍后再试');e.status=429;throw e}busy=true;try{
+ const limits=await config();if(typeof audio!=='string'||audio.length>Math.ceil(limits.maxBytes/3)*4||!/^[A-Za-z0-9+/]*={0,2}$/.test(audio))throw Error('录音过长或格式无效');
+ const b=Buffer.from(audio,'base64');if(b.length<44||b.length>limits.maxBytes||b.toString('ascii',0,4)!=='RIFF'||b.toString('ascii',8,12)!=='WAVE'||b.toString('ascii',12,16)!=='fmt '||b.readUInt16LE(20)!==1||b.readUInt16LE(22)!==1||b.readUInt32LE(24)!==16000||b.readUInt16LE(34)!==16||b.toString('ascii',36,40)!=='data'||b.readUInt32LE(40)!==b.length-44)throw Error('录音格式无效');
+ const value=await rpc('speech/transcribe',{request:{audioBase64:audio,language:'zh'}},120000);if(typeof value?.text!=='string')throw Error('识别结果无效');return {text:value.text};
+ }finally{busy=false}}
+return {config,transcribe};
+})();
 function validState(s) {const arrays=['members','categories','entries','goals','weekly_settlements','points_ledger','rewards','wishlist','story_entries','milestones','redemptions','sparks'];return !!(s && s.version===4 && s.couple && typeof s.couple==='object' && arrays.every(k=>Array.isArray(s[k]) && s[k].length<=100000) && s.members.length===2 && s.members.every(m=>m && typeof m.name==='string' && m.name.length<=200) && s.categories.some(c=>c && c.id==='none') && ['entries','goals','points_ledger','story_entries','redemptions'].every(k=>s[k].every(x=>x && ['me','him'].includes(x.memberId))) && s.entries.every(x=>typeof x.content==='string' && typeof x.date==='string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) && typeof x.start==='string' && typeof x.end==='string') && s.goals.every(x=>Array.isArray(x.keywords)) && typeof s.couple.since==='string' && /^\d{4}-\d{2}-\d{2}$/.test(s.couple.since) && s.members.some(m=>m.id==='me')&&s.members.some(m=>m.id==='him') && s.members.every(m=>m && (!m.avatar || (typeof m.avatar==='string' && /^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(m.avatar)))) && s.categories.every(c=>c && typeof c.color==='string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c.color)) && arrays.filter(k=>k!=='sparks').every(k=>s[k].every(item=>item && typeof item==='object' && (!('id' in item) || (typeof item.id==='string' && /^[a-z0-9_-]{1,100}$/i.test(item.id))))));}
 // A three-way merge only accepts independent edits. Deletions versus edits and
 // simultaneous changes to the same value remain explicit conflicts.
@@ -168,10 +186,10 @@ function reconcilePoints(before,after){
 const server=http.createServer(async(req,res)=>{try{
  res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
  const url=new URL(req.url,'http://localhost');const pathname=url.pathname;
- if((req.method==='GET'||req.method==='HEAD')&&pathname==='/download/women-ledger-0.2.0.apk'){
-  const apk=process.env.WOMEN_APK_PATH||path.join(publicDir,'downloads','women-ledger-0.2.0.apk');let size;
+ if((req.method==='GET'||req.method==='HEAD')&&/^\/download\/women-ledger-0\.[23]\.0\.apk$/.test(pathname)){
+  const filename=path.basename(pathname);const apk=process.env.WOMEN_APK_PATH||path.join(publicDir,'downloads',filename);let size;
   try{size=fs.statSync(apk).size}catch{return send(res,404,{error:'安装包暂不可用'});}
-  res.writeHead(200,{'Content-Type':'application/vnd.android.package-archive','Content-Length':size,'Content-Disposition':'attachment; filename="women-ledger-0.2.0.apk"','Cache-Control':'no-store'});
+  res.writeHead(200,{'Content-Type':'application/vnd.android.package-archive','Content-Length':size,'Content-Disposition':'attachment; filename="'+filename+'"','Cache-Control':'no-store'});
   if(req.method==='HEAD')return res.end();const stream=fs.createReadStream(apk);stream.on('error',()=>res.destroy());return stream.pipe(res);
  }
  if(req.method==='GET' && files[pathname]) {const name=files[pathname];const type=name.endsWith('.css')?'text/css':name.endsWith('.js')?'text/javascript':'text/html';res.writeHead(200,{'Content-Type':type+'; charset=utf-8','Cache-Control':'no-store'});return fs.createReadStream(path.join(publicDir,name)).pipe(res);}
@@ -190,6 +208,8 @@ const server=http.createServer(async(req,res)=>{try{
   }catch(e){db.exec('ROLLBACK');throw e;}
  }
  const s=session(req);if(!s)return send(res,401,{error:'请先登录'});
+ if(pathname==='/api/speech/config'&&req.method==='GET'){try{return send(res,200,await speechService.config())}catch{return send(res,503,{error:'语音服务暂不可用，请检查笔记本和连接'});}}
+ if(pathname==='/api/speech/transcribe'&&req.method==='POST'){try{const body=await getBody(req,8*1024*1024);return send(res,200,await speechService.transcribe(body.audioBase64))}catch(e){return send(res,e.status||503,{error:e.message==='语音服务正忙，请稍后再试'?e.message:'语音识别失败，请检查录音或稍后重试'});}}
  if(pathname==='/api/session'&&req.method==='GET')return send(res,200,{user:s.slot,account:s.user_id,legacySpace:s.space_id==='legacy',canInvite:db.prepare('SELECT count(*) n FROM space_members WHERE space_id=?').get(s.space_id).n===1});
  if(pathname==='/api/password'&&req.method==='POST'){
   const key='password:'+s.user_id,a=attempts.get(key)||{n:0,t:0};if(a.t>Date.now())return send(res,429,{error:'尝试次数过多，请稍后再试'});

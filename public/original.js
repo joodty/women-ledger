@@ -1710,6 +1710,7 @@
           'placeholder="接着上一段往下写…">' + esc(txt) + '</textarea>' +
         '<div class="write-foot">' +
           '<span class="write-count" id="story-count">' + txt.length + '/10000</span>' +
+          '<button type="button" class="story-mic" id="story-mic" aria-label="开始录音"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4M9 22h6"></path></svg><span>语音</span></button>' +
           '<button class="spark-btn" data-act="spark">' + UI.icon('sparkle', 13) + '换个灵感（可选）</button>' +
         '</div>' +
       '</div>' +

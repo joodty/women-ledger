@@ -652,6 +652,7 @@ img,svg{display:block;}
 
 /* 故事成篇 */
 .story-flow{position:relative;padding-left:26px;}
+.story-mic{display:inline-flex;align-items:center;gap:4px;color:var(--pink-ink);background:var(--pink-soft);border-radius:18px;padding:7px 10px;font-size:12px;white-space:nowrap}.story-mic.recording{background:#b65360;color:white}.story-mic:disabled{opacity:.6}
 .story-flow::before{content:"";position:absolute;left:5px;top:10px;bottom:70px;width:1px;background:var(--line-2);}
 .story-seg{position:relative;margin-bottom:13px;}
 .story-seg::before{

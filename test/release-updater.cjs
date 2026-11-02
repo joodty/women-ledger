@@ -10,6 +10,7 @@ let server;
  fs.mkdirSync(root,{recursive:true});fs.mkdirSync(repo,{recursive:true});
  for(const dest of [root,repo]){fs.copyFileSync(path.join(project,'server.cjs'),path.join(dest,'server.cjs'));fs.cpSync(path.join(project,'public'),path.join(dest,'public'),{recursive:true})}
  git('init','-b','main');git('config','user.email','test@example.invalid');git('config','user.name','Release Test');git('add','.');git('commit','-m','base');
+ const baselineTar=path.join(tmp,'baseline.tar');const baseline=spawnSync('git',['archive','--format=tar','--output',baselineTar,'HEAD','server.cjs'],{cwd:repo});if(baseline.status!==0)throw Error('cannot read test baseline');const unpack=spawnSync('tar',['-xf',baselineTar,'-C',root]);if(unpack.status!==0)throw Error('cannot unpack test baseline');
  fs.appendFileSync(path.join(repo,'public','style.css'),'\n/* release updater test */\n');
  if(process.env.LEDGER_TEST_RESTART)fs.appendFileSync(path.join(repo,'server.cjs'),'\n// release updater restart test\n');
  git('add','.');git('commit','-m','release');git('tag','v-test-1');
