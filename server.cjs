@@ -94,22 +94,46 @@ function protectPersonal(base,requested,slot){
   if(new Set(requested[key].map(x=>x.id)).size!==requested[key].length)throw Error('duplicate personal item');
  }
 }
+/* 记一笔也发分：每条 1 分，每人每天最多 3 条。
+   只对生效日之后的记录生效，避免把历史记录一次性补成一大笔分。 */
+const ENTRY_POINTS_SINCE='2026-11-02',ENTRY_POINTS_PER=1,ENTRY_POINTS_DAILY=3;
+/* 钱包：旧记录没有 wallet 字段，一律算个人分 */
+const walletTag=x=>x&&x.wallet==='ours'?'ours':'mine';
 function reconcilePoints(before,after){
  const oldEntries=new Map((before?.entries||[]).map(e=>[e.id,e]));
  const oldAwards=new Map((before?.points_ledger||[]).filter(p=>p.type==='checkin'&&p.entryId).map(p=>[p.entryId,p]));
  const goals=new Map(after.goals.map(g=>[g.id,g]));
- const ledger=(before?.points_ledger||[]).filter(p=>p.type!=='checkin'||!p.entryId);
+ const ledger=(before?.points_ledger||[]).filter(p=>!((p.type==='checkin'||p.type==='entry')&&p.entryId));
+ /* 目标打卡：共同目标谁打卡都能计入（分记在打卡人自己名下） */
  for(const e of after.entries){
-  const previous=oldEntries.get(e.id), old=oldAwards.get(e.id);let award=null;
+  const previous=oldEntries.get(e.id),old=oldAwards.get(e.id);let award=null;
   if(previous&&previous.goalId===e.goalId&&previous.memberId===e.memberId)award=old||null;
-  else if(e.goalId){const goal=goals.get(e.goalId),amount=goal?.pointsPerCheckin;
-   if(goal&&goal.memberId===e.memberId&&goal.status==='active'&&Number.isSafeInteger(amount)&&amount>0&&amount<=10000)
-    award={id:'checkin-'+e.id,entryId:e.id,memberId:e.memberId,type:'checkin',points:amount,date:e.date,note:'目标打卡'};
+  else if(e.goalId){const goal=goals.get(e.goalId),amount=goal?.pointsPerCheckin,shared=goal?.scope==='both';
+   if(goal&&(shared||goal.memberId===e.memberId)&&goal.status==='active'&&Number.isSafeInteger(amount)&&amount>0&&amount<=10000)
+    award={id:'checkin-'+e.id,entryId:e.id,memberId:e.memberId,type:'checkin',wallet:shared?'ours':'mine',points:amount,date:e.date,note:shared?'共同目标打卡':'目标打卡'};
   }
-  if(award)ledger.push(award);
+  if(award){award.wallet=walletTag(award);ledger.push(award);}
+ }
+ /* 记一笔：不进目标的那种，按天取前 3 条各 1 分 */
+ const days=new Map();
+ for(const e of after.entries){
+  if(e.goalId||String(e.date||'')<ENTRY_POINTS_SINCE)continue;
+  const key=e.memberId+'|'+e.date;
+  if(!days.has(key))days.set(key,[]);
+  days.get(key).push(e);
+ }
+ for(const [key,list] of days){
+  list.sort((a,b)=>String(a.start||'').localeCompare(String(b.start||''))||String(a.id).localeCompare(String(b.id)));
+  const memberId=key.slice(0,key.indexOf('|'));
+  for(const e of list.slice(0,ENTRY_POINTS_DAILY))
+   ledger.push({id:'entry-'+e.id,entryId:e.id,memberId,type:'entry',wallet:'mine',points:ENTRY_POINTS_PER,date:e.date,note:'记一笔'});
  }
  after.points_ledger=ledger;
- for(const slot of ['me','him']){const earned=ledger.filter(p=>p.memberId===slot).reduce((n,p)=>n+(Number.isFinite(p.points)?p.points:0),0);const spent=after.redemptions.reduce((n,r)=>n+(slot==='me'?(r.fromMe||0):(r.fromHim||0)),0);if(earned<spent)throw Error('已兑换积分，无法撤回该打卡');}
+ for(const slot of ['me','him'])for(const wallet of ['mine','ours']){
+  const earned=ledger.filter(p=>p.memberId===slot&&walletTag(p)===wallet).reduce((n,p)=>n+(Number.isFinite(p.points)?p.points:0),0);
+  const spent=after.redemptions.filter(r=>r.status!=='pending'&&walletTag(r)===wallet).reduce((n,r)=>n+(slot==='me'?(r.fromMe||0):(r.fromHim||0)),0);
+  if(earned<spent)throw Error('已兑换积分，无法撤回该打卡');
+ }
 }
 const server=http.createServer(async(req,res)=>{try{
  res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
@@ -153,25 +177,46 @@ const server=http.createServer(async(req,res)=>{try{
  if(pathname==='/api/logout'&&req.method==='POST'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha(cookie(req)));return send(res,200,{ok:true},{'Set-Cookie':'women_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'});}
  const legacy=s.space_id==='legacy',space=s.space_id;
  if(pathname==='/api/redeem'&&req.method==='POST'){
-  const body=await getBody(req);if(!['wish','reward'].includes(body.kind)||typeof body.id!=='string'||!/^[a-z0-9_-]{1,100}$/i.test(body.id)||typeof body.requestId!=='string'||!/^[a-z0-9_-]{1,100}$/i.test(body.requestId))return send(res,400,{error:'兑换请求无效'});
-  db.exec('BEGIN IMMEDIATE');try{
-   const row=legacy?db.prepare('SELECT revision,json FROM state WHERE id=1').get():db.prepare('SELECT revision,json FROM space_state WHERE space_id=?').get(space);
-   if(!row){db.exec('ROLLBACK');return send(res,400,{error:'还没有账本'});}const data=JSON.parse(row.json),old=data.redemptions.find(r=>r.id===body.requestId);
-   if(old){db.exec('ROLLBACK');if(old.memberId!==s.slot||(body.kind==='wish'?old.wishId:old.rewardId)!==body.id)return send(res,409,{error:'兑换请求编号冲突'});return send(res,200,{revision:row.revision,data:visibleState(data,s.slot)});}
-   const item=(body.kind==='wish'?data.wishlist:data.rewards).find(x=>x.id===body.id);
-   if(!item||(body.kind==='wish'&&['redeemed','done'].includes(item.status))){db.exec('ROLLBACK');return send(res,400,{error:'该内容不存在或已经兑换'});}
-   const value=String(item.pointsLabel||'').trim(),cost=/^[1-9]\d{0,4}$/.test(value)?Number(value):0;
-   const earned=data.points_ledger.filter(p=>p.memberId===s.slot).reduce((n,p)=>n+(Number.isFinite(p.points)?p.points:0),0),spent=data.redemptions.reduce((n,r)=>n+(s.slot==='me'?(r.fromMe||0):(r.fromHim||0)),0);
-   if(!cost||cost>10000){db.exec('ROLLBACK');return send(res,400,{error:'请先设置有效的兑换积分'});}
-   if(earned-spent<cost){db.exec('ROLLBACK');return send(res,400,{error:'积分不足，暂时不能兑换'});}
-   const now=new Date(),date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);data.redemptions.push({id:body.requestId,memberId:s.slot,date,name:'兑换「'+item.name+'」',wishId:body.kind==='wish'?item.id:undefined,rewardId:body.kind==='reward'?item.id:undefined,fromMe:s.slot==='me'?cost:0,fromHim:s.slot==='him'?cost:0,label:String(cost)});
-   if(body.kind==='wish')item.status='redeemed';const at=now.toISOString(),revision=row.revision+1;
-   if(legacy){db.prepare('INSERT INTO snapshots(revision,json,created_at) VALUES(?,?,?)').run(row.revision,row.json,at);db.prepare('UPDATE state SET revision=?,json=?,updated_at=? WHERE id=1').run(revision,JSON.stringify(data),at);db.prepare('DELETE FROM snapshots WHERE id NOT IN (SELECT id FROM snapshots ORDER BY id DESC LIMIT 100)').run();}
-   else{db.prepare('INSERT INTO space_snapshots(space_id,revision,json,created_at) VALUES(?,?,?,?)').run(space,row.revision,row.json,at);db.prepare('UPDATE space_state SET revision=?,json=?,updated_at=? WHERE space_id=?').run(revision,JSON.stringify(data),at,space);db.prepare('DELETE FROM space_snapshots WHERE space_id=? AND id NOT IN (SELECT id FROM space_snapshots WHERE space_id=? ORDER BY id DESC LIMIT 100)').run(space,space);}
-   db.exec('COMMIT');return send(res,200,{revision,data:visibleState(data,s.slot)});
-  }catch(e){db.exec('ROLLBACK');throw e;}
- }
- if(pathname==='/api/history'&&req.method==='GET'){const list=legacy?db.prepare('SELECT id,revision,created_at FROM snapshots ORDER BY id DESC LIMIT 20').all():db.prepare('SELECT id,revision,created_at FROM space_snapshots WHERE space_id=? ORDER BY id DESC LIMIT 20').all(space);return send(res,200,{items:list});}
+ const body=await getBody(req);if(!['wish','reward'].includes(body.kind)||typeof body.id!=='string'||!/^[a-z0-9_-]{1,100}$/i.test(body.id)||typeof body.requestId!=='string'||!/^[a-z0-9_-]{1,100}$/i.test(body.requestId))return send(res,400,{error:'兑换请求无效'});
+ db.exec('BEGIN IMMEDIATE');try{
+  const row=legacy?db.prepare('SELECT revision,json FROM state WHERE id=1').get():db.prepare('SELECT revision,json FROM space_state WHERE space_id=?').get(space);
+  if(!row){db.exec('ROLLBACK');return send(res,400,{error:'还没有账本'});}
+  const data=JSON.parse(row.json),old=data.redemptions.find(r=>r.id===body.requestId);
+  if(old){db.exec('ROLLBACK');if(old.memberId!==s.slot||(body.kind==='wish'?old.wishId:old.rewardId)!==body.id)return send(res,409,{error:'兑换请求编号冲突'});return send(res,200,{revision:row.revision,data:visibleState(data,s.slot),pending:old.status==='pending'});}
+  const item=(body.kind==='wish'?data.wishlist:data.rewards).find(x=>x.id===body.id);
+  if(!item||(body.kind==='wish'&&['redeemed','done'].includes(item.status))){db.exec('ROLLBACK');return send(res,400,{error:'该内容不存在或已经兑换'});}
+  const value=String(item.pointsLabel||'').trim(),cost=/^[1-9]\d{0,4}$/.test(value)?Number(value):0;
+  if(!cost||cost>10000){db.exec('ROLLBACK');return send(res,400,{error:'请先设置有效的兑换积分'});}
+  const balance=(slot,wallet)=>data.points_ledger.filter(p=>p.memberId===slot&&walletTag(p)===wallet).reduce((n,p)=>n+(Number.isFinite(p.points)?p.points:0),0)-data.redemptions.filter(r=>r.status!=='pending'&&walletTag(r)===wallet).reduce((n,r)=>n+(slot==='me'?(r.fromMe||0):(r.fromHim||0)),0);
+  const now=new Date(),date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  /* 属于「我们俩」的愿望：一人一半，且要两个人都点头 */
+  const shared=body.kind==='wish'&&item.scope!=='me';
+  let waiting=false;
+  if(shared){
+   if(cost%2!==0){db.exec('ROLLBACK');return send(res,400,{error:'两个人的兑换，分值要能被 2 整除'});}
+   const half=cost/2,open=data.redemptions.find(r=>r.status==='pending'&&r.wishId===item.id);
+   if(open&&open.memberId===s.slot){db.exec('ROLLBACK');return send(res,409,{error:'已经发出去了，等对方确认'});}
+   if(open){
+    if(balance('me','ours')<half||balance('him','ours')<half){db.exec('ROLLBACK');return send(res,400,{error:'说好一人一半，现在两个人的共同分还不够'});}
+    open.fromMe=half;open.fromHim=half;open.status='done';open.date=date;open.confirmedBy=s.slot;
+    item.status='redeemed';
+   }else{
+    if(balance(s.slot,'ours')<half){db.exec('ROLLBACK');return send(res,400,{error:'你的共同分还不够付这一半'});}
+    data.redemptions.push({id:body.requestId,memberId:s.slot,date,name:'兑换「'+item.name+'」',wishId:item.id,fromMe:0,fromHim:0,label:String(cost),wallet:'ours',status:'pending'});
+    waiting=true;
+   }
+  }else{
+   if(balance(s.slot,'mine')<cost){db.exec('ROLLBACK');return send(res,400,{error:'积分不足，暂时不能兑换'});}
+   data.redemptions.push({id:body.requestId,memberId:s.slot,date,name:'兑换「'+item.name+'」',wishId:body.kind==='wish'?item.id:undefined,rewardId:body.kind==='reward'?item.id:undefined,fromMe:s.slot==='me'?cost:0,fromHim:s.slot==='him'?cost:0,label:String(cost),wallet:'mine',status:'done'});
+   if(body.kind==='wish')item.status='redeemed';
+  }
+  const at=now.toISOString(),revision=row.revision+1;
+  if(legacy){db.prepare('INSERT INTO snapshots(revision,json,created_at) VALUES(?,?,?)').run(row.revision,row.json,at);db.prepare('UPDATE state SET revision=?,json=?,updated_at=? WHERE id=1').run(revision,JSON.stringify(data),at);db.prepare('DELETE FROM snapshots WHERE id NOT IN (SELECT id FROM snapshots ORDER BY id DESC LIMIT 100)').run();}
+  else{db.prepare('INSERT INTO space_snapshots(space_id,revision,json,created_at) VALUES(?,?,?,?)').run(space,row.revision,row.json,at);db.prepare('UPDATE space_state SET revision=?,json=?,updated_at=? WHERE space_id=?').run(revision,JSON.stringify(data),at,space);db.prepare('DELETE FROM space_snapshots WHERE space_id=? AND id NOT IN (SELECT id FROM space_snapshots WHERE space_id=? ORDER BY id DESC LIMIT 100)').run(space,space);}
+  db.exec('COMMIT');return send(res,200,{revision,data:visibleState(data,s.slot),pending:waiting});
+ }catch(e){db.exec('ROLLBACK');throw e;}
+}
+if(pathname==='/api/history'&&req.method==='GET'){const list=legacy?db.prepare('SELECT id,revision,created_at FROM snapshots ORDER BY id DESC LIMIT 20').all():db.prepare('SELECT id,revision,created_at FROM space_snapshots WHERE space_id=? ORDER BY id DESC LIMIT 20').all(space);return send(res,200,{items:list});}
  if(/^\/api\/history\/\d+$/.test(pathname)&&req.method==='GET'){const id=Number(pathname.split('/').pop());const row=legacy?db.prepare('SELECT revision,json,created_at FROM snapshots WHERE id=?').get(id):db.prepare('SELECT revision,json,created_at FROM space_snapshots WHERE space_id=? AND id=?').get(space,id);return row?send(res,200,{revision:row.revision,createdAt:row.created_at,data:visibleHistory(JSON.parse(row.json),s.slot)}):send(res,404,{error:'没有找到此版本'});}
  if(pathname==='/api/state'&&req.method==='GET'){const row=legacy?db.prepare('SELECT revision,json FROM state WHERE id=1').get():db.prepare('SELECT revision,json FROM space_state WHERE space_id=?').get(space);return send(res,200,row?{revision:row.revision,data:visibleState(JSON.parse(row.json),s.slot)}:{revision:0,data:null});}
  if(pathname==='/api/state'&&req.method==='POST'){

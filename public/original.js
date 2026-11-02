@@ -253,13 +253,16 @@
       }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
     },
 
-    pointsOf: function (memberId) {
+    pointsOf: function (memberId, wallet) {
+      var w = (wallet === 'mine' || wallet === 'ours') ? wallet : 'all';
       var add = DB.points_ledger
-        .filter(function (p) { return p.memberId === memberId; })
-        .reduce(function (s, p) { return s + p.points; }, 0);
-      var used = DB.redemptions.reduce(function (s, r) {
-        return s + (memberId === 'me' ? (r.fromMe || 0) : (r.fromHim || 0));
-      }, 0);
+        .filter(function (p) { return p.memberId === memberId && (w === 'all' || (p.wallet || 'mine') === w); })
+        .reduce(function (s, p) { return s + (Number.isFinite(p.points) ? p.points : 0); }, 0);
+      var used = DB.redemptions
+        .filter(function (r) { return r.status !== 'pending' && (w === 'all' || (r.wallet || 'mine') === w); })
+        .reduce(function (s, r) {
+          return s + (memberId === 'me' ? (r.fromMe || 0) : (r.fromHim || 0));
+        }, 0);
       return Math.max(0, add - used);
     },
     pointsBySource: function (memberId) {
@@ -846,7 +849,7 @@
         '</div>' +
         statRow + pairTabs +
         (st.todaySide === 'me' ? '<div class="card"><div class="card-title">本周目标<button class="card-link" data-act="go" data-go="goals">管理' + UI.icon('right', 12) + '</button></div>' +
-          (S.db.goals.filter(function(g){return g.memberId==='me' && g.status==='active';}).map(function(g){return '<button class="prog-row" data-act="go" data-go="goals"><span class="prog-main">'+esc(g.name)+'</span><span>'+S.goalProgress(g)+' / '+g.timesPerWeek+'</span></button>';}).join('') || '<button class="add-block" data-act="goal-add">添加长期目标</button>') + '</div>' : '') +
+          (S.db.goals.filter(function(g){return (g.memberId==='me'||g.scope==='both') && g.status==='active';}).map(function(g){return '<button class="prog-row" data-act="go" data-go="goals"><span class="prog-main">'+esc(g.name)+'</span><span>'+S.goalProgress(g)+' / '+g.timesPerWeek+'</span></button>';}).join('') || '<button class="add-block" data-act="goal-add">添加长期目标</button>') + '</div>' : '') +
         (st.todaySide === 'him' && !shareOpen
           ? '<div class="card"><div class="empty">他没有开放这一天的记录。<br>不追问，也不解释。</div></div>'
           : whoCard(st.todaySide)) +
@@ -866,15 +869,21 @@
     var v = String((w && w.pointsLabel) || '').trim();
     return /^[1-9]\d{0,4}$/.test(v) ? Number(v) : 99999;
   }
-  /* 还没兑完的愿望，按分值从低到高（越容易达成的越靠前） */
   function wishCostText(w) {
     return wishCost(w) > 9999 ? '待定' : esc(w.pointsLabel) + ' 分';
+  }
+  /* 排序：能正常兑的按分值从低到高，共同但奇数分的排后面，没定分值的最后 */
+  function wishRank(w) {
+    var cost = wishCost(w);
+    if (cost > 9999) return 1e7;
+    if (w.scope !== 'me' && cost % 2 !== 0) return 1e6 + cost;
+    return cost;
   }
   function openWishes() {
     return S.db.wishlist
       .filter(function (w) { return w.status !== 'redeemed' && w.status !== 'done'; })
       .slice()
-      .sort(function (a, b) { return wishCost(a) - wishCost(b); });
+      .sort(function (a, b) { return wishRank(a) - wishRank(b); });
   }
 
   Pages.together = function (st) {
@@ -907,7 +916,7 @@
         '<span class="prog-main">' +
           '<span class="prog-name">' + esc(w.name || '还没起名') + '</span>' +
           '<span class="prog-dots"><span class="txt">' +
-            esc(w.executorLabel || '我们一起') + ' · ' + wishCostText(w) +
+            (w.scope === 'me' ? '只属于我 · ' : '') + esc(w.executorLabel || '我们一起') + ' · ' + wishCostText(w) +
           '</span></span>' +
         '</span>' +
         '<span class="list-arrow">' + UI.icon('right', 16) + '</span>' +
@@ -969,40 +978,91 @@
   /* ============================================================
      兑换（原「积分」页：只管兑换，不再复述账本）
      ============================================================ */
-  Pages.points = function (st) {
-    var balance = S.pointsOf('me');
-    var list = openWishes();
-    var able = list.filter(function (w) { return wishCost(w) <= balance; });
-    var cheapest = list[0] || null;
+  /* 分值判断：个人愿望全额扣我的分；共同愿望各出一半，且分值必须是偶数 */
+  function wishWallet(w) { return w.scope === 'me' ? 'mine' : 'ours'; }
+  function wishCheck(w) {
+    var cost = wishCost(w);
+    if (cost > 9999) return { ok: false, reason: 'nocost', gap: 0, pay: 0 };
+    if (wishWallet(w) === 'mine') {
+      var mine = S.pointsOf('me', 'mine');
+      return { ok: cost <= mine, gap: cost - mine, pay: cost };
+    }
+    if (cost % 2 !== 0) return { ok: false, reason: 'odd', gap: 0, pay: 0 };
+    var ours = S.pointsOf('me', 'ours');
+    return { ok: cost / 2 <= ours, gap: cost / 2 - ours, pay: cost / 2 };
+  }
+  /* pages-main 与 pages-sub 是两个独立闭包，这里把分值判断交给全局，免得各写一份 */
+  global.Wish = { cost: wishCost, costText: wishCostText, wallet: wishWallet, check: wishCheck };
 
-    /* 余额：只有一个数，不再有「合计可用」「对方积分」 */
-    var balCard = '<div class="card" style="text-align:center;padding:24px 18px">' +
-      '<div class="pool-k">我的积分</div>' +
-      '<div class="pool-v" style="font-size:38px;margin-top:2px">' + balance + '</div>' +
+  Pages.points = function (st) {
+    var list = openWishes();
+    var able = list.filter(function (w) { return wishCheck(w).ok; });
+
+    /* 两个钱包：我们的分（共同）／我的分（个人） */
+    var balCard = '<div class="card">' +
+      '<div class="pool" style="grid-template-columns:1fr 1fr">' +
+        '<div class="pool-cell me"><div class="pool-k">我们的分</div><div class="pool-v">' +
+          S.pointsOf('me', 'ours') + '</div></div>' +
+        '<div class="pool-cell him"><div class="pool-k">我的分</div><div class="pool-v">' +
+          S.pointsOf('me', 'mine') + '</div></div>' +
+      '</div>' +
+      '<div class="chip-hint" style="margin:12px 0 0">' +
+        '「我们的分」兑两个人一起做的事，各出一半；「我的分」兑只属于我的事。</div>' +
     '</div>';
 
-    /* 现在能兑的：够分才出现，不够就只报还差多少 */
+    /* 等点头的兑换申请 */
+    var asks = S.db.redemptions.filter(function (r) { return r.status === 'pending'; }).map(function (r) {
+      var mine = r.memberId === 'me';
+      return '<div class="wish-item">' +
+        '<span class="wish-ico" style="background:var(--pink-soft);color:var(--pink-deep)">' +
+          UI.icon('heart', 19) + '</span>' +
+        '<span class="wish-main">' +
+          '<span class="wish-name">' + esc(r.name || '兑换') + '</span>' +
+          '<span class="wish-meta">' + (mine ? '你发起 · 等他点头' : '他发起 · 等你点头') + '</span>' +
+        '</span>' +
+        (mine ? '' : '<button class="wish-btn" data-act="confirm-redeem" data-id="' + esc(r.wishId || '') + '">去确认</button>') +
+      '</div>';
+    }).join('');
+    var askCard = asks
+      ? '<div class="card"><div class="card-title">兑换申请<span class="sub">两个人都点头才扣分</span></div>' + asks + '</div>'
+      : '';
+
+    /* 现在能兑的 */
     var ableRows = able.slice(0, 3).map(function (w) {
       var c = S.cat(w.cat === 'together' ? 'relate' : w.cat === 'eat' ? 'life' : 'leisure');
+      var pay = wishCheck(w).pay;
       return '<div class="wish-item">' +
         '<span class="wish-ico" style="background:' + UI.rgba(c.color, .18) + ';color:' + UI.shade(c.color) + '">' +
           UI.icon(w.icon || 'star', 19) + '</span>' +
         '<span class="wish-main">' +
           '<span class="wish-name">' + esc(w.name || '还没起名') + '</span>' +
-          '<span class="wish-meta">' + wishCostText(w) + ' · ' + esc(w.executorLabel || '我们一起') + '</span>' +
+          '<span class="wish-meta">' + wishCostText(w) + ' · ' +
+            (wishWallet(w) === 'mine' ? '从我的分扣' : '各出 ' + pay + ' 分') + '</span>' +
         '</span>' +
         '<button class="wish-btn" data-act="confirm-redeem" data-id="' + w.id + '">去兑换</button>' +
       '</div>';
     }).join('');
 
+    /* 一条都兑不了时，只报卡在哪里 */
+    var blocker = null;
+    for (var i = 0; i < list.length; i++) {
+      if (!wishCheck(list[i]).ok) { blocker = list[i]; break; }
+    }
     var gapText;
-    if (!cheapest) {
+    if (!list.length) {
       gapText = '还没有想做的事。<br>去「一起」加一个，再来这里兑。';
-    } else if (wishCost(cheapest) > 9999) {
-      gapText = '「' + esc(cheapest.name || '还没起名') + '」还没定分值。<br>去「一起」给它填一个数。';
+    } else if (blocker) {
+      var chk = wishCheck(blocker);
+      var nm = esc(blocker.name || '还没起名');
+      if (chk.reason === 'nocost') {
+        gapText = '「' + nm + '」还没定分值。<br>去「一起」给它填一个数。';
+      } else if (chk.reason === 'odd') {
+        gapText = '「' + nm + '」的分值是奇数。<br>两个人的兑换要能被 2 整除，改成偶数就行。';
+      } else {
+        gapText = '还差 <b>' + Math.max(0, chk.gap) + '</b> 分，「' + nm + '」就能兑。';
+      }
     } else {
-      gapText = '还差 <b>' + Math.max(0, wishCost(cheapest) - balance) + '</b> 分，「' +
-        esc(cheapest.name || '还没起名') + '」就能兑。';
+      gapText = '能兑的都在上面了。';
     }
 
     var ableCard = '<div class="card">' +
@@ -1011,7 +1071,7 @@
     '</div>';
 
     /* 兑换记录：一行一条，不展开 */
-    var rd = S.db.redemptions.slice()
+    var rd = S.db.redemptions.filter(function (r) { return r.status !== 'pending'; }).slice()
       .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; })
       .slice(0, 5);
     var rdRows = rd.map(function (r) {
@@ -1035,7 +1095,7 @@
         '<h1 class="page-title">兑换</h1>' +
         '<p class="page-sub">攒够分，就把想做的事做掉。</p>' +
       '</div>' +
-      balCard + ableCard + recordCard,
+      balCard + askCard + ableCard + recordCard,
       true
     );
   };
@@ -1326,6 +1386,8 @@
 
   var S = global.Store, UI = global.UI, D = S.D;
   var Pages = global.Pages || {};
+  var W = global.Wish || {};
+  var wishCost = W.cost, wishCostText = W.costText, wishWallet = W.wallet, wishCheck = W.check;
 
   function esc(s) { return UI.esc(s); }
   function sub(html) { return '<div class="page"><div class="sub-wrap">' + html + '</div></div>'; }
@@ -1395,7 +1457,7 @@
         '<div class="field"><div class="field-k">计入目标<i>选填</i></div>' +
           '<select id="f-goal" class="textarea" style="min-height:0;padding:12px 14px">' +
             '<option value="">不计入目标</option>' +
-            S.db.goals.filter(function(g){return g.memberId==='me' && (g.status==='active' || g.id===f.goalId);}).map(function(g){return '<option value="'+esc(g.id)+'"'+(f.goalId===g.id?' selected':'')+'>'+esc(g.name)+'</option>';}).join('') +
+            S.db.goals.filter(function(g){return (g.memberId==='me'||g.scope==='both') && (g.status==='active' || g.id===f.goalId);}).map(function(g){return '<option value="'+esc(g.id)+'"'+(f.goalId===g.id?' selected':'')+'>'+esc(g.name)+'</option>';}).join('') +
           '</select></div>' +
 
         '<div class="field"><div class="field-k">谁可以看到</div><select id="f-visibility" class="textarea" style="min-height:0;padding:12px 14px">' +
@@ -1561,17 +1623,18 @@
           '<span style="font-family:var(--serif);font-size:20px;font-weight:600;color:var(--pink-deep)">' +
             w.pointsLabel + '分</span></div>' +
         '<div class="pool" style="grid-template-columns:1fr 1fr">' +
-          '<div class="pool-cell me"><div class="pool-k">我的可用积分</div><div class="pool-v">' + S.pointsOf('me') + '</div></div>' +
-          '<div class="pool-cell sum"><div class="pool-k">还差</div><div class="pool-v">' + Math.max(0, wishCost(w) - S.pointsOf('me')) + '</div></div>' +
+          '<div class="pool-cell me"><div class="pool-k">' + (wishWallet(w)==='mine'?'我的分':'我们的分') + '</div><div class="pool-v">' + S.pointsOf('me',wishWallet(w)) + '</div></div>' +
+          '<div class="pool-cell sum"><div class="pool-k">还差</div><div class="pool-v">' + Math.max(0, wishCheck(w).gap) + '</div></div>' +
         '</div>' +
       '</div>' +
 
       '<div class="card">' +
-        '<div class="card-title">本次积分消耗<span class="sub">由兑换者支付</span></div>' +
-        '<div class="pay-row me">' +
-          '<span class="ava">' + UI.icon('heart', 13) + '</span>' +
-          '<span>从我的积分扣除</span><span class="v">' + esc(w.pointsLabel) + '分</span></div>' +
-        '<div class="chip-hint" style="margin-top:10px">确认兑换后从自己的积分中扣除。</div>' +
+        '<div class="card-title">本次积分消耗<span class="sub">' + (wishWallet(w)==='mine'?'由我自己支付':'两个人各一半') + '</span></div>' +
+        (wishWallet(w)==='mine'
+          ? '<div class="pay-row me"><span class="ava">' + UI.icon('heart', 13) + '</span><span>从我的分扣除</span><span class="v">' + esc(w.pointsLabel) + '分</span></div>'
+          : '<div class="pay-row me"><span class="ava">' + UI.icon('heart', 13) + '</span><span>我出</span><span class="v">' + (wishCost(w)/2) + '分</span></div>' +
+            '<div class="pay-row me"><span class="ava">' + UI.icon('heart', 13) + '</span><span>他出</span><span class="v">' + (wishCost(w)/2) + '分</span></div>') +
+        '<div class="chip-hint" style="margin-top:10px">' + (wishWallet(w)==='mine'?'确认后立刻从我的分里扣除。':'发出后要他也点头才扣分。') + '</div>' +
       '</div>' +
 
       '<div class="card">' +
@@ -1582,7 +1645,7 @@
       '</div>' +
 
       '<div class="btn-row">' +
-        '<button class="btn-primary" data-act="confirm-redeem" data-id="' + w.id + '">确认兑换 · ' + esc(w.pointsLabel) + '分</button>' +
+        '<button class="btn-primary" data-act="confirm-redeem" data-id="' + w.id + '">' + (wishWallet(w)==='mine'?'确认兑换 · ':'发出兑换申请 · ') + esc(w.pointsLabel) + '分</button>' +
         '<button class="btn-ghost" data-act="back">再想想</button>' +
       '</div>'
     );
@@ -1913,6 +1976,8 @@
         field('每周次数', chipsNum(r.timesPerWeek), '记一笔时选择这个目标，就会计入本周进度。') +
         field('每次打卡得分', input('e-goal-points', String(r.pointsPerCheckin || 0), '例如 5'), '自己设定，0 分表示只记录进度。') +
         field('每日提醒（选填）', '<input class="input-box" type="time" id="e-reminder-time" value="' + esc(r.reminderTime || '') + '">', '设置后，登录新版安卓 App 并允许通知，手机每天会提醒；留空关闭。') +
+        field('属于谁', chipsPick('scope', r.scope || 'me', [['me', '只算我自己的'], ['both', '我们共同的']]),
+          '共同目标谁打卡都算，得分进「我们的分」，用来兑两个人一起做的事。') +
         field('谁可以看到', chipsPick('visibility', r.visibility || 'shared', [['private','仅自己'],['shared','双方可见']]));
     } else if (kind === 'reward') {
       body =
@@ -1940,7 +2005,9 @@
       body =
         field('名称', input('e-name', r.name || '', '比如：周末一起去看展')) +
         field('类型', chipsPick('cat', r.cat, [['together', '一起做的'], ['eat', '想吃的'], ['go', '想去的']])) +
-        field('需要的分', input('e-points', r.pointsLabel || '待定', '待定')) +
+        field('需要的分', input('e-points', r.pointsLabel || '待定', '待定'), '两个人的兑换要能被 2 整除，各出一半。') +
+        field('属于谁', chipsPick('scope', r.scope || 'both', [['me', '只属于我'], ['both', '我们俩']]),
+          '只属于我的，用我自己的分兑，一个人就能兑；我们俩的，各出一半，要两个人都点头。') +
         field('谁执行', chipsPick('executor', r.executor, [['me', '我来安排'], ['him', '他来安排'], ['both', '我们一起']]),
           '必须写清谁做，不能只写物品。');
     }
@@ -2181,19 +2248,19 @@
       return {
         id: 'g' + crypto.randomUUID(), memberId: 'me', name: '', icon: 'target',
         categoryId: cat || 'growth', timesPerWeek: 3, points: null,
-        pointsLabel: '待定', pointsPerCheckin: 0, keywords: [], doneThisWeek: 0, totalWeeks: 0, status: 'active', visibility: 'private'
+        pointsLabel: '待定', pointsPerCheckin: 0, keywords: [], doneThisWeek: 0, totalWeeks: 0, status: 'active', visibility: 'private', scope: 'me'
       };
     },
     reward: function () {
       return {
         id: 'r' + crypto.randomUUID(), tier: 'small', name: '', points: null,
-        pointsLabel: '待定', executor: 'me', executorLabel: '我执行'
+        pointsLabel: '待定', executor: 'me', executorLabel: '我执行', scope: 'me'
       };
     },
     wish: function (cat) {
       return {
         id: 'w' + crypto.randomUUID(), cat: cat || 'together', name: '', points: null,
-        pointsLabel: '待定', executor: 'both', executorLabel: '我们一起',
+        pointsLabel: '待定', executor: 'both', executorLabel: '我们一起', scope: 'both',
         status: 'saving', icon: cat === 'eat' ? 'hotpot' : cat === 'go' ? 'beach' : 'art'
       };
     },
@@ -2629,8 +2696,12 @@
       case 'confirm-redeem': {
         var w = S.db.wishlist.filter(function (x) { return x.id === id; })[0];
         if (!w) return;
-        if (!confirm('确定用自己的 ' + w.pointsLabel + ' 分兑换「' + w.name + '」吗？')) break;
-        global.WomenSync.redeem('wish',id).then(function(){nav('points');toast('兑换成功，已扣除积分。');}).catch(function(e){toast(e.message || '兑换未完成，请重试。');});
+        var sharedWish = wishWallet(w) !== 'mine';
+        var askText = sharedWish
+          ? '确定一起用 ' + w.pointsLabel + ' 分兑换「' + w.name + '」吗？\n你们各出 ' + (wishCost(w) / 2) + ' 分，发出后要他也点头才扣分。'
+          : '确定用我的 ' + w.pointsLabel + ' 分兑换「' + w.name + '」吗？';
+        if (!confirm(askText)) break;
+        global.WomenSync.redeem('wish',id).then(function(res){nav('points');toast(res && res.pending ? '已经发出去了，等他点头。' : (sharedWish ? '兑换成功，你们各扣了一半。' : '兑换成功，已扣除积分。'));}).catch(function(e){toast(e.message || '兑换未完成，请重试。');});
         break;
       }
 
