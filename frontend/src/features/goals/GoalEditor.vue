@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { requestReminders } from "../../lib/native";
 import { useSpace } from "../../stores/space";
 import { useDraft } from "../../lib/draft";
 import { useTask } from "../../lib/task";
@@ -38,6 +39,7 @@ function save() {
       "goals",
       f.value.baseVersion,
     );
+    if (f.value.reminderTime) requestReminders();
     clear();
     emit("close");
   });

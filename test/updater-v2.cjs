@@ -22,8 +22,10 @@ function pack() {
 }
 (async () => {
   try {
-    pack();
-    const archive = path.resolve(__dirname, "../dist/women-web-v2.tar.gz"),
+    if (!process.env.LEDGER_TEST_ARTIFACT) pack();
+    const archive =
+        process.env.LEDGER_TEST_ARTIFACT ||
+        path.resolve(__dirname, "../dist/women-web-v2.tar.gz"),
       sum = fs.readFileSync(archive + ".sha256", "utf8").split(/\s/)[0];
     assert.equal(updater.digest(archive), sum);
     const meta = updater.unpack(archive, stage);

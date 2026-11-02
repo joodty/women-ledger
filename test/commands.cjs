@@ -180,6 +180,17 @@ const command = (type, payload, expectedVersion) => ({
       (
         await req(
           "/api/v2/commands",
+          command("story.publish", { id: "story-a", text: "字".repeat(10000) }),
+          a.cookie,
+        )
+      ).status,
+      200,
+      "same published draft can be acknowledged after restart",
+    );
+    assert.equal(
+      (
+        await req(
+          "/api/v2/commands",
           command("story.publish", {
             id: "story-too-long",
             text: "字".repeat(10001),
