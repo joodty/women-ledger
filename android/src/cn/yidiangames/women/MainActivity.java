@@ -35,6 +35,7 @@ public final class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private WebMessagePort reminderPort;
     private PermissionRequest microphoneRequest;
+    private AppUpdates appUpdates;
 
     private boolean allowed(Uri uri) {
         return uri != null && "https".equalsIgnoreCase(uri.getScheme())
@@ -92,6 +93,7 @@ public final class MainActivity extends Activity {
             }
         });
         web.setDownloadListener((url, agent, disposition, mime, length) -> Toast.makeText(this,"导出备份请暂时使用手机浏览器打开网站",Toast.LENGTH_LONG).show());
+        appUpdates=new AppUpdates(this);appUpdates.check();
         Uri start = getIntent().getData(); web.loadUrl(allowed(start) ? start.toString() : SITE);
     }
     private void connectReminders(WebView view){
@@ -116,8 +118,8 @@ public final class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=31){AlarmManager alarm=(AlarmManager)getSystemService(ALARM_SERVICE);if(!alarm.canScheduleExactAlarms()){try{Toast.makeText(this,"请允许闹钟和提醒，让提醒更准时",Toast.LENGTH_LONG).show();startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName())));}catch(Exception e){Toast.makeText(this,"系统可能延迟提醒",Toast.LENGTH_LONG).show();}}}
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==MICROPHONE_PERMISSION){PermissionRequest pending=microphoneRequest;microphoneRequest=null;if(pending!=null){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED&&allowed(Uri.parse(web.getUrl()==null?"":web.getUrl())))pending.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});else pending.deny();}return;}if(request==NOTIFICATION_PERMISSION){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)requestExactAlarm();else Toast.makeText(this,"请在系统设置中允许通知，否则无法收到提醒",Toast.LENGTH_LONG).show();}}
-    @Override protected void onResume(){super.onResume();ReminderStore.scheduleAll(this);}
-    @Override protected void onDestroy(){if(reminderPort!=null){reminderPort.close();reminderPort=null;}super.onDestroy();}
+    @Override protected void onResume(){super.onResume();ReminderStore.scheduleAll(this);if(appUpdates!=null)appUpdates.onResume();}
+    @Override protected void onDestroy(){if(appUpdates!=null)appUpdates.close();if(reminderPort!=null){reminderPort.close();reminderPort=null;}super.onDestroy();}
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request,result,data);
         if (request == PICK_FILE && fileCallback != null) { fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data)); fileCallback=null; }

@@ -37,4 +37,11 @@ try { Run (Join-Path $JavaHome 'bin\jar.exe') @('uf',$unsigned,'classes.dex') } 
 Run (Join-Path $tools 'zipalign.exe') @('-f','4',$unsigned,$aligned)
 Run (Join-Path $tools 'apksigner.bat') @('sign','--ks',$keystore,'--ks-key-alias','androiddebugkey','--ks-pass','pass:android','--key-pass','pass:android','--out',$apk,$aligned)
 Run (Join-Path $tools 'apksigner.bat') @('verify','--verbose',$apk)
+$manifest = [xml](Get-Content -Raw (Join-Path $project 'AndroidManifest.xml'))
+$androidNs = 'http://schemas.android.com/apk/res/android'
+$versionCode = [int]$manifest.manifest.GetAttribute('versionCode', $androidNs)
+$versionName = $manifest.manifest.GetAttribute('versionName', $androidNs)
+if ($versionCode -le 0 -or $versionName -notmatch '^\d{1,3}\.\d{1,3}\.\d{1,3}$') { throw 'Invalid APK version in AndroidManifest.xml' }
+$metadata = [ordered]@{versionCode=$versionCode;versionName=$versionName;downloadPath="/download/women-ledger-$versionName.apk"} | ConvertTo-Json -Compress
+[IO.File]::WriteAllText((Join-Path (Split-Path -Parent $project) 'public\app-version.json'), $metadata + "`n", [Text.UTF8Encoding]::new($false))
 Write-Output "APK: $apk"
