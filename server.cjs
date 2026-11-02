@@ -85,10 +85,23 @@ function visibleHistory(data,slot){
  result.milestones=result.milestones.filter(x=>x.kind!=='goal');
  return result;
 }
+/* 对方的共同约定，唯一允许改的字段是把 joined 从 false 改成 true —— 这就是「加入」。
+   别的字段一律不许动：分是发起人定的，内容也是他写的。 */
+function onlyJoined(base,requested){
+ if(base.length!==requested.length)return false;
+ const m=new Map(requested.map(x=>[x.id,x]));
+ for(const x of base){
+  const y=m.get(x.id);
+  if(!y||x.id!==y.id||x.scope!=='both'||x.joined!==false||y.joined!==true)return false;
+  const keys=new Set([...Object.keys(x),...Object.keys(y)]);
+  for(const k of keys){if(k==='joined')continue;if(!equal(x[k],y[k]))return false;}
+ }
+ return true;
+}
 function protectPersonal(base,requested,slot){
  for(const key of ['entries','goals']){
   const a=base[key].filter(x=>x.memberId!==slot),b=requested[key].filter(x=>x.memberId!==slot);
-  if(!equal(a,b))throw Error('cannot change another member’s personal items');
+  if(!equal(a,b)&&!(key==='goals'&&onlyJoined(a,b)))throw Error('cannot change another member’s personal items');
   const original=new Map(base[key].map(x=>[x.id,x]));
   for(const x of requested[key]){const old=original.get(x.id);if(!x.id||!['private','shared',undefined].includes(x.visibility)||(old&&old.memberId!==x.memberId))throw Error('invalid item ownership');}
   if(new Set(requested[key].map(x=>x.id)).size!==requested[key].length)throw Error('duplicate personal item');
@@ -99,19 +112,22 @@ function protectPersonal(base,requested,slot){
 /* 记一笔曾经发过分，2026-11-02 之后取消：奖励「记录」这个动作没有意义，
    而且写什么都行、无法核实。历史分保留，不追溯扣除。 */
 const ENTRY_POINTS_SINCE='2026-11-02',ENTRY_POINTS_UNTIL='2026-11-02',ENTRY_POINTS_PER=1,ENTRY_POINTS_DAILY=3;
+/* 每周保底：这一周做到过至少一个约定，就再给 3 分，免得一分开不出来。
+   从 2026-11-02 那一周起算，更早的周不补。 */
+const WEEK_FLOOR=3,WEEK_FLOOR_SINCE='2026-11-02';
 /* 钱包：旧记录没有 wallet 字段，一律算个人分 */
 const walletTag=x=>x&&x.wallet==='ours'?'ours':'mine';
 function reconcilePoints(before,after){
  const oldEntries=new Map((before?.entries||[]).map(e=>[e.id,e]));
  const oldAwards=new Map((before?.points_ledger||[]).filter(p=>p.type==='checkin'&&p.entryId).map(p=>[p.entryId,p]));
  const goals=new Map(after.goals.map(g=>[g.id,g]));
- const ledger=(before?.points_ledger||[]).filter(p=>!((p.type==='checkin'||p.type==='entry')&&p.entryId));
+ const ledger=(before?.points_ledger||[]).filter(p=>!((p.type==='checkin'||p.type==='entry')&&p.entryId)&&p.type!=='week');
  /* 目标打卡：共同目标谁打卡都能计入（分记在打卡人自己名下） */
  for(const e of after.entries){
   const previous=oldEntries.get(e.id),old=oldAwards.get(e.id);let award=null;
   if(previous&&previous.goalId===e.goalId&&previous.memberId===e.memberId)award=old||null;
   else if(e.goalId){const goal=goals.get(e.goalId),amount=goal?.pointsPerCheckin,shared=goal?.scope==='both';
-   if(goal&&(shared||goal.memberId===e.memberId)&&goal.status==='active'&&Number.isSafeInteger(amount)&&amount>0&&amount<=10000)
+   if(goal&&(shared||goal.memberId===e.memberId)&&(goal.joined!==false)&&goal.status==='active'&&Number.isSafeInteger(amount)&&amount>0&&amount<=10000)
     award={id:'checkin-'+e.id,entryId:e.id,memberId:e.memberId,type:'checkin',wallet:shared?'ours':'mine',points:amount,date:e.date,note:shared?'共同目标打卡':'目标打卡'};
   }
   if(award){award.wallet=walletTag(award);ledger.push(award);}
@@ -129,6 +145,18 @@ function reconcilePoints(before,after){
   const memberId=key.slice(0,key.indexOf('|'));
   for(const e of list.slice(0,ENTRY_POINTS_DAILY))
    ledger.push({id:'entry-'+e.id,entryId:e.id,memberId,type:'entry',wallet:'mine',points:ENTRY_POINTS_PER,date:e.date,note:'记一笔'});
+ }
+ /* 周保底：按周一算一周，一个成员这周做到过至少一个约定就 +3，记在自己的钱包 */
+ const weekFloor=new Set();
+ for(const p of ledger){
+  if(p.type!=='checkin'||!p.memberId||!/^\d{4}-\d{2}-\d{2}$/.test(String(p.date||'')))continue;
+  const ms=Date.parse(p.date+'T00:00:00Z'),start=new Date(ms-((new Date(ms).getUTCDay()+6)%7)*86400000).toISOString().slice(0,10);
+  if(start<WEEK_FLOOR_SINCE)continue;
+  weekFloor.add(p.memberId+'|'+start);
+ }
+ for(const key of [...weekFloor].sort()){
+  const cut=key.indexOf('|'),memberId=key.slice(0,cut),week=key.slice(cut+1);
+  ledger.push({id:'week-'+memberId+'-'+week,memberId,type:'week',wallet:'mine',points:WEEK_FLOOR,date:week,note:'本周约定保底'});
  }
  after.points_ledger=ledger;
  for(const slot of ['me','him'])for(const wallet of ['mine','ours']){

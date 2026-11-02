@@ -184,10 +184,24 @@
       var today = D.today();
       var start = D.shift(today, -((D.parse(today).getDay() + 6) % 7));
       var end = D.shift(start, 6);
+      /* 只数自己的：对方把这条记成私密时我这边看不到，数进来就会两边不一样 */
       return DB.entries.filter(function (e) {
         return e.memberId === 'me' && e.goalId === goal.id && e.date >= start && e.date <= end;
       }).length;
     },
+    /* 一次性的约定看「做过没有」，不看这周做没做 */
+    goalEverDone: function (goal) {
+      return DB.entries.some(function (e) { return e.memberId === 'me' && e.goalId === goal.id; });
+    },
+    goalDone: function (goal) {
+      if (goal.kind === 'once') return store.goalEverDone(goal);
+      return store.goalProgress(goal) >= (goal.timesPerWeek || 1);
+    },
+    goalText: function (goal) {
+      if (goal.kind === 'once') return store.goalEverDone(goal) ? '已完成' : '一次就完';
+      return store.goalProgress(goal) + ' / ' + (goal.timesPerWeek || 1);
+    },
+    goalUnjoined: function (goal) { return goal.scope === 'both' && goal.joined === false; },
     unfinishedCount: function (memberId, dateKey) {
       return store.entriesOf(memberId, dateKey).filter(function (e) { return !e.categoryId; }).length;
     },
@@ -848,8 +862,22 @@
           '<p class="page-sub">记一两行就好。</p>' +
         '</div>' +
         statRow + pairTabs +
-        (st.todaySide === 'me' ? '<div class="card"><div class="card-title">本周目标<button class="card-link" data-act="go" data-go="goals">管理' + UI.icon('right', 12) + '</button></div>' +
-          (S.db.goals.filter(function(g){return (g.memberId==='me'||g.scope==='both') && g.status==='active';}).map(function(g){return '<button class="prog-row" data-act="go" data-go="goals"><span class="prog-main">'+esc(g.name)+'</span><span>'+S.goalProgress(g)+' / '+g.timesPerWeek+'</span></button>';}).join('') || '<button class="add-block" data-act="goal-add">添加长期目标</button>') + '</div>' : '') +
+        (st.todaySide === 'me' ? (function () {
+          var gs = S.db.goals.filter(function (g) {
+            return g.status === 'active' && (g.memberId === 'me' || g.scope === 'both');
+          });
+          var rows = gs.map(function (g) {
+            return '<button class="prog-row" data-act="go" data-go="goals">' +
+              '<span class="prog-main"><span class="prog-name">' + esc(g.name) + '</span></span>' +
+              (g.scope === 'both' ? '<span class="task-who">我们的</span>' : '') +
+              '<span class="goal-p' + (S.goalDone(g) ? ' ok' : '') + '">' +
+                esc(S.goalUnjoined(g) ? '等他加入' : S.goalText(g)) + '</span>' +
+            '</button>';
+          }).join('');
+          return '<div class="card"><div class="card-title">约定' +
+            '<button class="card-link" data-act="go" data-go="goals">管理' + UI.icon('right', 12) + '</button></div>' +
+            (rows || '<button class="add-block" data-act="goal-add">定一个约定</button>') + '</div>';
+        })() : '') +
         (st.todaySide === 'him' && !shareOpen
           ? '<div class="card"><div class="empty">他没有开放这一天的记录。<br>不追问，也不解释。</div></div>'
           : whoCard(st.todaySide)) +
@@ -923,6 +951,31 @@
       '</button>';
     }).join('');
 
+    /* ----- ② 我们的约定：做到了就攒分 ----- */
+    var ourGoals = S.db.goals.filter(function (g) { return g.scope === 'both' && g.status === 'active'; });
+    var goalRows = ourGoals.map(function (g) {
+      var unjoined = S.goalUnjoined(g);
+      var right = !unjoined
+        ? '<span class="task-gap">' + esc(S.goalText(g)) + ' · ' + (g.pointsPerCheckin || 0) + ' 分</span>'
+        : (g.memberId === 'me'
+            ? '<span class="task-gap off">等他加入</span>'
+            : '<button class="wish-btn" data-act="join-goal" data-id="' + g.id + '">加入</button>');
+      return '<div class="wish-item">' +
+        '<span class="wish-ico" style="background:var(--pink-soft);color:var(--pink-deep)">' +
+          UI.icon('check', 18) + '</span>' +
+        '<span class="wish-main"><span class="task-top">' +
+          '<span class="wish-name">' + esc(g.name || '还没起名') + '</span>' + right + '</span>' +
+        '</span>' +
+      '</div>';
+    }).join('');
+
+    var goalCard = '<div class="card">' +
+      '<div class="card-title">我们的约定<span class="sub">做到了就攒分</span>' +
+        '<button class="card-link" data-act="goal-add" data-scope="both">加一个' + UI.icon('right', 12) + '</button>' +
+      '</div>' +
+      (goalRows || '<div class="empty">还没有一起做的事。定一件小的，谁做都算。</div>') +
+    '</div>';
+
     var wishCard = '<div class="card">' +
       '<div class="card-title">想一起做的事' +
         '<button class="card-link" data-act="go" data-go="wishlist">管理' + UI.icon('right', 12) + '</button>' +
@@ -971,7 +1024,7 @@
         '<h1 class="page-title">一起</h1>' +
         '<p class="page-sub">把想做的事慢慢实现</p>' +
       '</div>' +
-      statusRow + wishCard + pastCard,
+      statusRow + goalCard + wishCard + pastCard,
       true
     );
   };
@@ -1331,7 +1384,7 @@
         '<h1 class="page-title">设置</h1>' +
         '<p class="page-sub">把我们的空间调整成舒服的样子</p>' +
       '</div>' +
-      memberCard + '<div class="card" style="padding:14px;margin-bottom:16px">记录和目标可选择仅自己或双方可见；愿望等共同内容双方可见。旧记录默认双方可见。</div>' + listHtml + backup +
+      memberCard + '<div class="card" style="padding:14px;margin-bottom:16px">记录和约定可选择仅自己或双方可见；愿望等共同内容双方可见。旧记录默认双方可见。</div>' + listHtml + backup +
       '<div class="page-foot">没有连续打卡，也没有扣分。</div>' +
       DEMO,
       true
@@ -1425,7 +1478,7 @@
         '<div class="field"><div class="field-k">计入目标<i>选填</i></div>' +
           '<select id="f-goal" class="textarea" style="min-height:0;padding:12px 14px">' +
             '<option value="">不计入目标</option>' +
-            S.db.goals.filter(function(g){return (g.memberId==='me'||g.scope==='both') && (g.status==='active' || g.id===f.goalId);}).map(function(g){return '<option value="'+esc(g.id)+'"'+(f.goalId===g.id?' selected':'')+'>'+esc(g.name)+'</option>';}).join('') +
+            S.db.goals.filter(function(g){return (g.memberId==='me'||g.scope==='both') && g.joined!==false && (g.status==='active' || g.id===f.goalId);}).map(function(g){return '<option value="'+esc(g.id)+'"'+(f.goalId===g.id?' selected':'')+'>'+esc(g.name)+'</option>';}).join('') +
           '</select></div>' +
 
         '<div class="field"><div class="field-k">谁可以看到</div><select id="f-visibility" class="textarea" style="min-height:0;padding:12px 14px">' +
@@ -1469,73 +1522,86 @@
   }
 
   /* ============================================================
-     ⑦ 长期目标
+     ⑦ 约定（原长期目标）
      ============================================================ */
   Pages.goals = function () {
-    var goals = S.db.goals.filter(function (g) { return g.memberId === 'me' || g.scope === 'both'; });
-    var active = goals.filter(function (g) { return g.status === 'active'; });
-    var ownActive = active.filter(function (g) { return g.memberId === 'me'; });
+    var active = S.db.goals.filter(function (g) { return g.status === 'active'; });
+    var mine = active.filter(function (g) { return g.scope !== 'both' && g.memberId === 'me'; });
+    var ours = active.filter(function (g) { return g.scope === 'both'; });
+    var openMine = mine.filter(function (g) { return !S.goalDone(g); });
 
-    var cards = active.map(function (g) {
+    function card(g) {
       var c = S.cat(g.categoryId);
-      var kws = g.keywords.map(function (k) {
-        return '<span class="kw ' + (g.icon === 'run' ? 'pink' : 'blue') + '">' + esc(k) + '</span>';
-      }).join('');
-      return '<div class="goal-card">' +
+      var shared = g.scope === 'both';
+      var unjoined = S.goalUnjoined(g);
+      var creatorIsMe = g.memberId === 'me';
+      var done = S.goalDone(g);
+
+      var right = '';
+      if (unjoined) {
+        right = creatorIsMe
+          ? '<span class="goal-stat">等他加入</span>'
+          : '<button class="btn-mini" data-act="join-goal" data-id="' + g.id + '">加入这个约定</button>';
+      } else if (creatorIsMe) {
+        right = '<button class="goal-edit" data-act="open-edit" data-kind="goal" data-id="' + g.id + '">' +
+          UI.icon('edit', 17) + '</button>';
+      }
+
+      var prog = '';
+      if (g.kind === 'once') {
+        prog = '<span class="goal-stat">' + (done ? '已完成' : '一次就完') + '</span>';
+      } else {
+        for (var i = 0; i < (g.timesPerWeek || 1); i++) {
+          prog += '<span class="dot-s' + (i < S.goalProgress(g) ? ' on' : '') +
+            '" style="color:' + c.color + '"></span>';
+        }
+        prog += '<span class="txt">' + S.goalProgress(g) + '/' + g.timesPerWeek + '</span>';
+      }
+
+      return '<div class="goal-card' + (done ? ' goal-card-done' : '') + '">' +
         '<div class="goal-head">' +
           '<span class="goal-ico">' + UI.icon(g.icon, 20) + '</span>' +
-          '<span class="goal-name">' + esc(g.name) + '</span>' +
-          (g.memberId === 'me' ? '<button class="goal-edit" data-act="open-edit" data-kind="goal" data-id="' + g.id + '">' + UI.icon('edit', 17) + '</button>' : '<span class="goal-stat">共同目标 · 对方创建</span>') +
+          '<span class="goal-name">' + esc(g.name) + '</span>' + right +
         '</div>' +
-        '<div class="kv"><span class="kv-k">归属分类</span><span class="kv-v">' +
+        '<div class="kv"><span class="kv-k">分类</span><span class="kv-v">' +
           '<span class="kw" style="background:' + UI.rgba(c.color, .2) + ';color:' + UI.shade(c.color) + '">' +
-            c.name + '</span></span></div>' +
-        '<div class="kv"><span class="kv-k">每周次数</span><span class="kv-v">每周 ' + g.timesPerWeek + ' 次</span></div>' +
-        '<div class="kv"><span class="kv-k">每次打卡</span><span class="kv-v">' + (g.pointsPerCheckin || 0) + ' 分</span></div>' +
-        (g.reminderTime ? '<div class="kv"><span class="kv-k">每日提醒</span><span class="kv-v">' + esc(g.reminderTime) + '</span></div>' : '') +
+            esc(c.name) + '</span></span></div>' +
+        '<div class="kv"><span class="kv-k">做到一次</span><span class="kv-v">' +
+          (g.pointsPerCheckin || 0) + ' 分 · 进' + (shared ? '我们的分' : '我的分') + '</span></div>' +
         '<div class="goal-foot">' +
-          '<span class="goal-stat">本周我打卡 ' + S.goalProgress(g) + '/' + g.timesPerWeek + ' · 进行中</span>' +
+          '<span class="goal-stat prog-dots">' + prog + '</span>' +
           '<span class="goal-btns">' +
-            (g.memberId === 'me' ? '<button class="btn-mini" data-act="goal-done" data-id="' + g.id + '">' + UI.icon('check', 13) + '结束目标</button>' +
-            '<button class="btn-mini ghost" data-act="goal-drop" data-id="' + g.id + '">' + UI.icon('trash', 13) + '放弃</button>' : '') +
+            (creatorIsMe && !unjoined
+              ? (done
+                  ? '<button class="btn-mini" data-act="goal-done" data-id="' + g.id + '">' + UI.icon('check', 13) + '归档</button>'
+                  : '<button class="btn-mini ghost" data-act="goal-drop" data-id="' + g.id + '">' + UI.icon('trash', 13) + '放弃</button>')
+              : '') +
           '</span>' +
         '</div>' +
       '</div>';
-    }).join('');
-
-    var prog = active.map(function (g) {
-      var c = S.cat(g.categoryId);
-      var dots = '';
-      for (var i = 0; i < g.timesPerWeek; i++) {
-        dots += '<span class="dot-s' + (i < S.goalProgress(g) ? ' on' : '') +
-          '" style="color:' + c.color + '"></span>';
-      }
-      return '<div class="prog-row">' +
-        '<span class="prog-ico" style="background:' + UI.rgba(c.color, .18) + ';color:' + UI.shade(c.color) + '">' +
-          UI.icon(g.icon, 18) + '</span>' +
-        '<span class="prog-main"><span class="prog-name">' + esc(g.name) + '</span></span>' +
-        '<span class="prog-dots">' + dots +
-          '<span class="txt">' + S.goalProgress(g) + '/' + g.timesPerWeek + '</span></span>' +
-      '</div>';
-    }).join('');
+    }
 
     var settle = S.db.weekly_settlements[0];
 
     return sub(
-      UI.subHead('今天', '我的长期目标', ownActive.length + '/3') +
-      '<div class="sub-lead">最多 3 个 · 记录目标进度</div>' +
-      cards +
-      (ownActive.length < 3
-        ? '<button class="add-block" data-act="goal-add">' + UI.icon('plus', 15) +
-          '新增长期目标 · ' + ownActive.length + '/3</button>'
-        : '<div class="tip-band">' + UI.icon('lock', 14) + '已经 3 个了。先完成或放弃一个，再加新的。</div>') +
-      '<div class="card">' +
-        '<div class="card-title">本周进度<span class="sub">只显示自己</span></div>' +
-        (prog || '<div class="empty">还没有进行中的目标。</div>') +
-        (settle ? '<div class="settle-row">' + UI.icon('calendar', 14) +
-          '<span>上周已结算：<b>' + esc(settle.text) + ' +' + esc(settle.label) + '分</b></span></div>' : '') +
+      UI.subHead('今天', '约定', openMine.length + '/3') +
+      '<div class="sub-lead">定下的事，做到一次记一次，每次都有分。</div>' +
+      '<div class="wl-sec"><div class="wl-sec-head">我的约定<span class="n">' + openMine.length + '/3</span></div>' +
+        (mine.length ? mine.map(card).join('')
+          : '<div class="empty">还没有约定。<br>从一件小到不会失败的事开始。</div>') +
+        (openMine.length < 3
+          ? '<button class="add-block" data-act="goal-add">' + UI.icon('plus', 15) +
+            '新增约定 · ' + openMine.length + '/3</button>'
+          : '<div class="tip-band">' + UI.icon('lock', 14) + '已经 3 个了。先完成或放弃一个，再加新的。</div>') +
       '</div>' +
-      '<div class="page-foot">完成或不想做了可以归档，历史记录保留</div>'
+      '<div class="wl-sec"><div class="wl-sec-head">我们的约定<span class="n">' + ours.length + '</span>' +
+        '<button class="sum-go" data-act="goal-add" data-scope="both">' + UI.icon('plus', 14) + '加一个</button></div>' +
+        (ours.length ? ours.map(card).join('')
+          : '<div class="empty">定一件两个人一起做的事，谁做都算。</div>') +
+      '</div>' +
+      (settle ? '<div class="card"><div class="settle-row">' + UI.icon('calendar', 14) +
+        '<span>上周已结算：<b>' + esc(settle.text) + ' +' + esc(settle.label) + '分</b></span></div></div>' : '') +
+      '<div class="page-foot">做到一次就去「记一笔」里选中它；做完或不想做了可以归档，历史保留</div>'
     );
   };
 
@@ -2010,7 +2076,7 @@
   };
 
   /* ============================================================
-     通用编辑弹层（长期目标 / 奖励 / 愿望）
+     通用编辑弹层（约定 / 奖励 / 愿望）
      ============================================================ */
   Pages.editSheet = function (st) {
     var ed = st.edit || {};
@@ -2019,7 +2085,7 @@
     var isNew = !!ed.isNew;
     var cats = S.db.categories.filter(function (c) { return c.id !== 'none'; });
 
-    var titleMap = { goal: '长期目标', reward: '奖励', wish: '愿望', cat: '分类', member: '名字' };
+    var titleMap = { goal: '约定', reward: '奖励', wish: '愿望', cat: '分类', member: '名字' };
     var title = (isNew ? '新增' : '编辑') + (titleMap[kind] || '');
 
     function field(k, inner, hint) {
@@ -2051,17 +2117,36 @@
       return '<div class="chips">' + out + '</div>';
     }
 
+    /* 分值档：不让人随手写 500 分，只在档里选。档位只管量级，不管内容。
+       一次就完的可以做大事，给到 30；每周要做的靠次数攒，单次最多 5。 */
+    function pointsPick(cur, once) {
+      var tiers = once ? [1, 2, 3, 5, 8, 10, 20, 30] : [1, 2, 3, 5];
+      var v = Number(cur) || 0;
+      var out = tiers.map(function (n) {
+        return '<button class="chip-num' + (v === n ? ' on' : '') +
+          '" data-act="pick-field" data-f="pointsPerCheckin" data-v="' + n + '">' + n + '</button>';
+      }).join('');
+      return '<div class="chips">' + out + '</div>';
+    }
+
     var body = '';
     if (kind === 'goal') {
+      var once = r.kind === 'once';
       body =
-        field('名称', input('e-name', r.name || '', '比如：规律运动')) +
+        field('约定内容', input('e-name', r.name || '', '比如：每天走 20 分钟')) +
         field('归属分类', chipsCat(r.categoryId)) +
-        field('每周次数', chipsNum(r.timesPerWeek), '记一笔时选择这个目标，就会计入本周进度。') +
-        field('每次打卡得分', input('e-goal-points', String(r.pointsPerCheckin || 0), '例如 5'), '自己设定，0 分表示只记录进度。') +
-        field('每日提醒（选填）', '<input class="input-box" type="time" id="e-reminder-time" value="' + esc(r.reminderTime || '') + '">', '设置后，登录新版安卓 App 并允许通知，手机每天会提醒；留空关闭。') +
+        field('做几次', chipsPick('kind', r.kind || 'repeat', [['once', '一次就完'], ['repeat', '每周要做']]),
+          once ? '做完就结束，可以归档。' : '每周做到几次，记一次算一次。') +
+        (once ? '' : field('每周次数', chipsNum(r.timesPerWeek), '记一笔时选中这个约定，就会计入本周进度。')) +
+        field('做到一次几分', pointsPick(r.pointsPerCheckin, once),
+          once ? '一次就完的可以给高分：小事 1-3，中等 5-10，大事 20-30。'
+               : '每周要做的别给高分，一次最多 5 分；攒分靠很多次。') +
         field('属于谁', chipsPick('scope', r.scope || 'me', [['me', '只算我自己的'], ['both', '我们共同的']]),
-          '共同目标谁打卡都算，得分进「我们的分」，用来兑两个人一起做的事。') +
-        field('谁可以看到', chipsPick('visibility', r.visibility || 'shared', [['private','仅自己'],['shared','双方可见']]));
+          '共同的约定要两个人都点头：一人发起，另一人加入。做到的分进「我们的分」。') +
+        (r.scope === 'both' && r.joined === false
+          ? '<div class="tip-band">' + UI.icon('clock', 14) + '等他加入；加入之前做了不计分。</div>'
+          : '') +
+        field('每天提醒（选填）', '<input class="input-box" type="time" id="e-reminder-time" value="' + esc(r.reminderTime || '') + '">', '设置后，登录新版安卓 App 并允许通知，手机每天会提醒；留空关闭。');
     } else if (kind === 'reward') {
       body =
         field('名称', input('e-name', r.name || '', '写成行为，比如：他做一顿饭，我休息')) +
@@ -2105,7 +2190,7 @@
         '<button class="btn-primary" data-act="save-edit">' + (isNew ? '添加' : '保存') + '</button>' +
         (kind === 'goal' && !isNew
           ? '<div class="btn-row" style="margin-top:10px">' +
-              '<button class="btn-ghost" data-act="goal-archive" data-id="' + r.id + '">归档这个目标</button></div>'
+              '<button class="btn-ghost" data-act="goal-archive" data-id="' + r.id + '">归档这个约定</button></div>'
           : '') +
         '<div class="foot-line">随时可以改，改了不影响历史记录。</div>' +
       '</div>' +
@@ -2325,13 +2410,16 @@
     document.body.style.overflow = '';
   }
 
-  /* ---------------- 编辑弹层（目标 / 奖励 / 愿望） ---------------- */
+  /* ---------------- 编辑弹层（约定 / 奖励 / 愿望） ---------------- */
   var EDIT_DEFAULTS = {
-    goal: function (cat) {
+    goal: function (cat, scope) {
       return {
         id: 'g' + crypto.randomUUID(), memberId: 'me', name: '', icon: 'target',
-        categoryId: cat || 'growth', timesPerWeek: 3, points: null,
-        pointsLabel: '待定', pointsPerCheckin: 0, keywords: [], doneThisWeek: 0, totalWeeks: 0, status: 'active', visibility: 'private', scope: 'me'
+        categoryId: cat || 'growth', kind: 'repeat', timesPerWeek: 3,
+        points: null, pointsLabel: '待定', pointsPerCheckin: 3,
+        keywords: [], doneThisWeek: 0, totalWeeks: 0, status: 'active',
+        visibility: scope === 'both' ? 'shared' : 'private',
+        scope: scope === 'both' ? 'both' : 'me', joined: scope !== 'both'
       };
     },
     reward: function () {
@@ -2355,7 +2443,7 @@
     }
   };
 
-  function openEdit(kind, id, cat) {
+  function openEdit(kind, id, cat, presetScope) {
     var arr = kind === 'goal' ? S.db.goals
       : kind === 'reward' ? S.db.rewards
         : kind === 'cat' ? S.db.categories
@@ -2363,7 +2451,7 @@
             : S.db.wishlist;
     var rec = id ? arr.filter(function (x) { return x.id === id; })[0] : null;
     var isNew = !rec;
-    if (!rec) rec = EDIT_DEFAULTS[kind](cat);
+    if (!rec) rec = EDIT_DEFAULTS[kind](cat, presetScope);
     state.edit = { kind: kind, isNew: isNew, rec: JSON.parse(JSON.stringify(rec)) };
     state.sheet = 'edit';
     sheetRoot.innerHTML = Pages.editSheet(state);
@@ -2396,10 +2484,17 @@
     var r = e.rec;
     if (!r.name) { toast('先写个名字。'); return; }
     if (e.kind === 'goal') {
-      if (!/^(0|[1-9]\d{0,4})$/.test(String(r.pointsPerCheckin)) || Number(r.pointsPerCheckin)>10000) { toast('每次打卡得分请输入 0 到 10000 的整数。'); return; }
-      r.pointsPerCheckin=Number(r.pointsPerCheckin);
+      var cap = r.kind === 'once' ? 30 : 5;
+      r.pointsPerCheckin = Number(r.pointsPerCheckin) || 0;
+      if (r.pointsPerCheckin < 1 || r.pointsPerCheckin > cap) {
+        toast(r.kind === 'once' ? '分值选一档，一次就完的最多 30 分。' : '分值选一档，每周要做的单次最多 5 分。');
+        return;
+      }
+      if (r.kind === 'once') r.timesPerWeek = 1;
+      if (r.scope === 'both') r.visibility = 'shared';
+      /* 新建的共同约定等对方加入；改自己的旧约定不动这个标记 */
+      if (e.isNew) r.joined = r.scope !== 'both';
       if (r.reminderTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.reminderTime)) { toast('请选择有效的提醒时间。'); return; }
-      if (r.scope === 'both' && r.visibility === 'private') { toast('共同目标需要双方可见；打卡记录仍可单独设为私密。'); return; }
       if (r.reminderTime && global.WomenReminders) global.WomenReminders.requestPermission();
     }
 
@@ -2413,8 +2508,10 @@
 
     if (e.kind === 'goal') {
       if (e.isNew) {
-        var act = S.db.goals.filter(function (g) { return g.memberId === 'me' && g.status === 'active'; });
-        if (act.length >= 3) { toast('最多同时 3 个长期目标。'); return; }
+        var act = S.db.goals.filter(function (g) {
+          return g.memberId === 'me' && g.status === 'active' && g.scope !== 'both' && !S.goalDone(g);
+        });
+        if (r.scope !== 'both' && act.length >= 3) { toast('最多同时 3 个自己的约定。'); return; }
         S.db.goals.push(r);
       } else {
         var g0 = S.db.goals.filter(function (x) { return x.id === r.id; })[0];
@@ -2752,11 +2849,26 @@
         });
         break;
 
-      /* 长期目标 */
+      /* 约定 */
       case 'goal-add': {
-        var act0 = S.db.goals.filter(function (g) { return g.memberId === 'me' && g.status === 'active'; });
-        if (act0.length >= 3) { toast('最多同时 3 个长期目标。'); return; }
-        openEdit('goal', null);
+        var wantBoth = el.getAttribute('data-scope') === 'both';
+        if (!wantBoth) {
+          var act0 = S.db.goals.filter(function (g) {
+            return g.memberId === 'me' && g.status === 'active' && g.scope !== 'both' && !S.goalDone(g);
+          });
+          if (act0.length >= 3) { toast('最多同时 3 个自己的约定。'); return; }
+        }
+        openEdit('goal', null, undefined, wantBoth ? 'both' : 'me');
+        break;
+      }
+
+      /* 对方的共同约定：点头加入，之后做到就计分 */
+      case 'join-goal': {
+        var jg = S.db.goals.filter(function (x) { return x.id === id; })[0];
+        if (!jg || jg.joined !== false) return;
+        if (jg.memberId === 'me') { toast('这是你发起的，等他加入。'); return; }
+        jg.joined = true;
+        S.save(); render(); toast('加入了。做到一次就计分。');
         break;
       }
 
@@ -2764,12 +2876,12 @@
       case 'goal-drop': {
         var g = S.db.goals.filter(function (x) { return x.id === id; })[0];
         if (!g) return;
-        if (!confirm(act === 'goal-done' ? '确定结束并归档这个长期目标吗？日常打卡请在记一笔时选择该目标。' : '确定放弃并归档这个长期目标吗？')) return;
+        if (!confirm(act === 'goal-done' ? '确定结束并归档这个约定吗？平时的打卡记录都会保留。' : '确定放弃并归档这个约定吗？')) return;
         g.status = act === 'goal-done' ? 'done' : 'dropped';
         if (act === 'goal-done' && g.visibility !== 'private') {
           S.db.milestones.push({
             id: 'm' + crypto.randomUUID(), kind: 'goal', date: D.today(),
-            title: '完成长期目标「' + g.name + '」', note: ''
+            title: '完成约定「' + g.name + '」', note: ''
           });
         }
         S.save(); render(); toast(act === 'goal-done' ? '已归档。历史记录保留。' : '已放弃。历史记录保留。');
@@ -2906,10 +3018,29 @@
         collectEdit();
         var f = el.getAttribute('data-f');
         var v = el.getAttribute('data-v');
-        if (f === 'timesPerWeek') v = +v;
-        if (state.edit.kind === 'goal' && f === 'scope' && v === 'both') state.edit.rec.visibility = 'shared';
-        if (state.edit.kind === 'goal' && f === 'visibility' && v === 'private' && state.edit.rec.scope === 'both') { toast('共同目标需要双方可见；打卡记录仍可单独设为私密。'); return; }
-        state.edit.rec[f] = v;
+        var R = state.edit.rec;
+        if (f === 'timesPerWeek' || f === 'pointsPerCheckin') v = +v;
+        if (state.edit.kind === 'goal' && f === 'kind') {
+          R.kind = v;
+          if (v === 'once') {
+            R.timesPerWeek = 1;
+            if (!(R.pointsPerCheckin >= 1 && R.pointsPerCheckin <= 30)) R.pointsPerCheckin = 8;
+          } else {
+            if (!(R.pointsPerCheckin >= 1 && R.pointsPerCheckin <= 5)) R.pointsPerCheckin = 3;
+            if (!(R.timesPerWeek >= 1)) R.timesPerWeek = 3;
+          }
+          refreshEdit();
+          break;
+        }
+        if (state.edit.kind === 'goal' && f === 'scope') {
+          if (v === 'both') { R.visibility = 'shared'; R.joined = false; }
+          else { R.joined = true; }
+        }
+        if (f === 'pointsPerCheckin' && R.kind !== 'once' && v > 5) {
+          toast('每周要做的，单次最多 5 分。');
+          return;
+        }
+        R[f] = v;
         refreshEdit();
         break;
       }
@@ -2920,7 +3051,7 @@
 
       case 'goal-archive': {
         var gg = S.db.goals.filter(function (x) { return x.id === id; })[0];
-        if (!gg || !confirm('确定结束并归档这个长期目标吗？日常打卡请在记一笔时选择该目标。')) break;
+        if (!gg || !confirm('确定结束并归档这个约定吗？平时的打卡记录都会保留。')) break;
         if (gg) { gg.status = 'done'; S.save(); }
         closeSheet();
         render();

@@ -47,8 +47,13 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  s.data.entries.push({id:'e3',memberId:'me',date:'2026-11-02',start:'22:00',end:'22:30',minutes:30,content:'睡',goalId:'g2',categoryId:'none',visibility:'shared'});
  assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
  s=await get(a.cookie);
- assert.equal(balance(s.data,'me','mine'),8,'个人目标进我的分');
+ assert.equal(balance(s.data,'me','mine'),11,'个人目标 8 分 + 这周做到过约定，保底 3 分');
  assert.equal(balance(s.data,'me','ours'),6,'个人目标不动共同分');
+ /* 周保底：一个成员一周只给一次，记在周一那一天 */
+ const floor=s.data.points_ledger.filter(p=>p.type==='week');
+ assert.equal(floor.length,2,'两个人都做到过，各一行保底');
+ assert.equal(floor.find(p=>p.memberId==='me').date,'2026-11-02','保底记在周一');
+ assert.equal(floor.find(p=>p.memberId==='me').points,3);
 
  /* C. 共同愿望：先发起，不扣分 */
  s=await get(a.cookie);
@@ -100,7 +105,7 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  r=await req('/api/redeem',{kind:'wish',id:'w3',requestId:'req-a-4'},a.cookie);
  assert.equal(r.status,200);
  assert.equal(r.data.pending,false,'个人愿望不需要等对方');
- assert.equal(balance(r.data.data,'me','mine'),5,'从我的分里扣 3');
+ assert.equal(balance(r.data.data,'me','mine'),8,'从我的分里扣 3');
  assert.equal(balance(r.data.data,'me','ours'),1,'共同分不受影响');
 
  /* H. 记一笔不再发分（2026-11-02 之后取消） */
@@ -110,7 +115,25 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  s=await get(a.cookie);
  const dayPts=s.data.points_ledger.filter(p=>p.type==='entry'&&p.date==='2026-11-03');
  assert.equal(dayPts.length,0,'记一笔不再发分');
- assert.equal(balance(s.data,'me','mine'),5,'记录不改变我的分');
+ assert.equal(balance(s.data,'me','mine'),8,'记录不改变我的分');
+
+
+ /* I. 还没加入的共同约定不计分，加入后补算 */
+ s=await get(a.cookie);
+ s.data.goals.push({id:'g9',memberId:'me',name:'一起看剧',scope:'both',status:'active',joined:false,timesPerWeek:1,pointsPerCheckin:4,keywords:[],visibility:'shared',categoryId:'none'});
+ s.data.entries.push({id:'e9',memberId:'me',date:'2026-11-03',start:'20:00',end:'20:30',minutes:30,content:'看',goalId:'g9',categoryId:'none',visibility:'shared'});
+ assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
+ s=await get(a.cookie);
+ assert.equal(balance(s.data,'me','ours'),1,'还没加入的共同约定不计分');
+ s.data.goals.find(g=>g.id==='g9').joined=true;
+ assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
+ s=await get(a.cookie);
+ assert.equal(balance(s.data,'me','ours'),1,'加入本身不发分，之前做的也不补');
+ s.data.entries.push({id:'e10',memberId:'me',date:'2026-11-03',start:'21:00',end:'21:30',minutes:30,content:'看',goalId:'g9',categoryId:'none',visibility:'shared'});
+ assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
+ s=await get(a.cookie);
+ assert.equal(balance(s.data,'me','ours'),5,'加入后做到才算，4 分');
+ assert.equal(balance(s.data,'me','mine'),8,'周保底不重复给，一周只加一次');
 
  console.log('PASS: two wallets, shared goals, half payment, both confirm, entries earn nothing');
 }finally{proc.kill();setTimeout(()=>fs.rmSync(dir,{recursive:true,force:true}),500)}})().catch(e=>{console.error(e);process.exitCode=1});
