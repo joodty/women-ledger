@@ -74,3 +74,13 @@ powershell -ExecutionPolicy Bypass -File android/build.ps1 -JavaHome 'C:\path\to
 
 运行 `npm ci` 安装锁定版本的开发测试依赖，再运行 `npx playwright install chromium` 安装测试浏览器。使用 Node.js 24 或以上执行 `npm test`，覆盖账号、鉴权、空间隔离、私人记录、积分、冲突及浏览器操作。测试使用独立临时数据库，不应使用生产数据库。这不是对所有实体设备或生产域名的验收。
 
+## 发布网站
+
+平板上的 `ops/release-updater.cjs` 独立运行，每五分钟检查一次本仓库 GitHub 的最新正式 Release；普通推送、草稿和预发布不会触发部署。只有正式版本所指的提交属于 `main` 历史，更新程序才会接受。仓库协作者的发布权限也意味着可以触发生产部署。
+
+发布前在独立测试数据库中运行 `npm ci` 和 `npm test`，确认代码已合并并推送到 `main`。然后在 GitHub 的 Releases 页面创建正式 Release，标签指向准备上线的 `main` 提交，选择 Publish release；不要勾选预发布。部署不需要她的电脑连接服务器或配置服务器 SSH 密钥。部署有最多约五分钟检查延迟，前提是平板运行且可以访问 GitHub。
+
+更新程序会校验脚本语法、在线备份 SQLite 并检查完整性，在备份的独立副本上试启动，再备份旧代码和部署；后端变动时由现有监督程序重启服务。运行日志在平板 `~/women-ledger/release-updater.log`，状态在 `release-updater-state.json`；备份在平板本机，不是异地备份。发生部署失败时程序尝试恢复旧代码并停止重复部署该提交；数据库不会自动回滚，以免覆盖部署期间写入的数据，必须人工检查日志和备份。当前检查不能代替正式发布前的完整测试。更新程序本身需要单独维护，不会自动替换自己。
+
+此流程只部署网页和服务端，**不会构建或发布 Android APK**。网页修改后重开 App 即可；安卓原生代码、权限或资源变化仍需构建并分发签名一致的 APK。
+
