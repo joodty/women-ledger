@@ -185,7 +185,7 @@
       var start = D.shift(today, -((D.parse(today).getDay() + 6) % 7));
       var end = D.shift(start, 6);
       return DB.entries.filter(function (e) {
-        return e.memberId === goal.memberId && e.goalId === goal.id && e.date >= start && e.date <= end;
+        return e.memberId === 'me' && e.goalId === goal.id && e.date >= start && e.date <= end;
       }).length;
     },
     unfinishedCount: function (memberId, dateKey) {
@@ -870,12 +870,12 @@
     return /^[1-9]\d{0,4}$/.test(v) ? Number(v) : 99999;
   }
   function wishCostText(w) {
-    return wishCost(w) > 9999 ? '待定' : esc(w.pointsLabel) + ' 分';
+    return wishCost(w) > 10000 ? '待定' : esc(w.pointsLabel) + ' 分';
   }
   /* 排序：能正常兑的按分值从低到高，共同但奇数分的排后面，没定分值的最后 */
   function wishRank(w) {
     var cost = wishCost(w);
-    if (cost > 9999) return 1e7;
+    if (cost > 10000) return 1e7;
     if (w.scope !== 'me' && cost % 2 !== 0) return 1e6 + cost;
     return cost;
   }
@@ -933,7 +933,7 @@
 
     /* ----- ③ 一起做过的：兑换 / 见面 / 里程碑，倒序一行一条 ----- */
     var events = [];
-    S.db.redemptions.forEach(function (r) {
+    S.db.redemptions.filter(function(r){return r.status !== 'pending' && r.status !== 'cancelled';}).forEach(function (r) {
       events.push({ date: r.date, text: r.name || '兑换', ico: 'gift' });
     });
     S.db.milestones.forEach(function (m) {
@@ -982,7 +982,7 @@
   function wishWallet(w) { return w.scope === 'me' ? 'mine' : 'ours'; }
   function wishCheck(w) {
     var cost = wishCost(w);
-    if (cost > 9999) return { ok: false, reason: 'nocost', gap: 0, pay: 0 };
+    if (cost > 10000) return { ok: false, reason: 'nocost', gap: 0, pay: 0 };
     if (wishWallet(w) === 'mine') {
       var mine = S.pointsOf('me', 'mine');
       return { ok: cost <= mine, gap: cost - mine, pay: cost };
@@ -1021,6 +1021,7 @@
           '<span class="wish-meta">' + (mine ? '你发起 · 等他点头' : '他发起 · 等你点头') + '</span>' +
         '</span>' +
         (mine ? '' : '<button class="wish-btn" data-act="confirm-redeem" data-id="' + esc(r.wishId || '') + '">去确认</button>') +
+        '<button class="wish-btn saving" data-act="cancel-redemption" data-id="' + esc(r.id) + '">取消申请</button>' +
       '</div>';
     }).join('');
     var askCard = asks
@@ -1071,7 +1072,7 @@
     '</div>';
 
     /* 兑换记录：一行一条，不展开 */
-    var rd = S.db.redemptions.filter(function (r) { return r.status !== 'pending'; }).slice()
+    var rd = S.db.redemptions.filter(function (r) { return r.status !== 'pending' && r.status !== 'cancelled'; }).slice()
       .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; })
       .slice(0, 5);
     var rdRows = rd.map(function (r) {
@@ -1504,8 +1505,9 @@
      ⑦ 长期目标
      ============================================================ */
   Pages.goals = function () {
-    var goals = S.db.goals.filter(function (g) { return g.memberId === 'me'; });
+    var goals = S.db.goals.filter(function (g) { return g.memberId === 'me' || g.scope === 'both'; });
     var active = goals.filter(function (g) { return g.status === 'active'; });
+    var ownActive = active.filter(function (g) { return g.memberId === 'me'; });
 
     var cards = active.map(function (g) {
       var c = S.cat(g.categoryId);
@@ -1516,8 +1518,7 @@
         '<div class="goal-head">' +
           '<span class="goal-ico">' + UI.icon(g.icon, 20) + '</span>' +
           '<span class="goal-name">' + esc(g.name) + '</span>' +
-          '<button class="goal-edit" data-act="open-edit" data-kind="goal" data-id="' + g.id + '">' +
-            UI.icon('edit', 17) + '</button>' +
+          (g.memberId === 'me' ? '<button class="goal-edit" data-act="open-edit" data-kind="goal" data-id="' + g.id + '">' + UI.icon('edit', 17) + '</button>' : '<span class="goal-stat">共同目标 · 对方创建</span>') +
         '</div>' +
         '<div class="kv"><span class="kv-k">归属分类</span><span class="kv-v">' +
           '<span class="kw" style="background:' + UI.rgba(c.color, .2) + ';color:' + UI.shade(c.color) + '">' +
@@ -1526,10 +1527,10 @@
         '<div class="kv"><span class="kv-k">每次打卡</span><span class="kv-v">' + (g.pointsPerCheckin || 0) + ' 分</span></div>' +
         (g.reminderTime ? '<div class="kv"><span class="kv-k">每日提醒</span><span class="kv-v">' + esc(g.reminderTime) + '</span></div>' : '') +
         '<div class="goal-foot">' +
-          '<span class="goal-stat">本周 ' + S.goalProgress(g) + '/' + g.timesPerWeek + ' · 进行中</span>' +
+          '<span class="goal-stat">本周我打卡 ' + S.goalProgress(g) + '/' + g.timesPerWeek + ' · 进行中</span>' +
           '<span class="goal-btns">' +
-            '<button class="btn-mini" data-act="goal-done" data-id="' + g.id + '">' + UI.icon('check', 13) + '结束目标</button>' +
-            '<button class="btn-mini ghost" data-act="goal-drop" data-id="' + g.id + '">' + UI.icon('trash', 13) + '放弃</button>' +
+            (g.memberId === 'me' ? '<button class="btn-mini" data-act="goal-done" data-id="' + g.id + '">' + UI.icon('check', 13) + '结束目标</button>' +
+            '<button class="btn-mini ghost" data-act="goal-drop" data-id="' + g.id + '">' + UI.icon('trash', 13) + '放弃</button>' : '') +
           '</span>' +
         '</div>' +
       '</div>';
@@ -1554,12 +1555,12 @@
     var settle = S.db.weekly_settlements[0];
 
     return sub(
-      UI.subHead('今天', '我的长期目标', active.length + '/3') +
+      UI.subHead('今天', '我的长期目标', ownActive.length + '/3') +
       '<div class="sub-lead">最多 3 个 · 记录目标进度</div>' +
       cards +
-      (active.length < 3
+      (ownActive.length < 3
         ? '<button class="add-block" data-act="goal-add">' + UI.icon('plus', 15) +
-          '新增长期目标 · ' + active.length + '/3</button>'
+          '新增长期目标 · ' + ownActive.length + '/3</button>'
         : '<div class="tip-band">' + UI.icon('lock', 14) + '已经 3 个了。先完成或放弃一个，再加新的。</div>') +
       '<div class="card">' +
         '<div class="card-title">本周进度<span class="sub">只显示自己</span></div>' +
@@ -2107,6 +2108,7 @@
   'use strict';
 
   var S = global.Store, UI = global.UI, D = S.D, Pages = global.Pages;
+  var wishWallet = global.Wish.wallet, wishCost = global.Wish.cost;
 
   var view = document.getElementById('view');
   var sidebar = document.getElementById('sidebar');
@@ -2316,6 +2318,7 @@
       if (!/^(0|[1-9]\d{0,4})$/.test(String(r.pointsPerCheckin)) || Number(r.pointsPerCheckin)>10000) { toast('每次打卡得分请输入 0 到 10000 的整数。'); return; }
       r.pointsPerCheckin=Number(r.pointsPerCheckin);
       if (r.reminderTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.reminderTime)) { toast('请选择有效的提醒时间。'); return; }
+      if (r.scope === 'both' && r.visibility === 'private') { toast('共同目标需要双方可见；打卡记录仍可单独设为私密。'); return; }
       if (r.reminderTime && global.WomenReminders) global.WomenReminders.requestPermission();
     }
 
@@ -2705,6 +2708,12 @@
         break;
       }
 
+      case 'cancel-redemption': {
+        if(!confirm('确定取消这次共同兑换申请吗？')) break;
+        global.WomenSync.cancelRedemption(id).then(function(){toast('申请已取消。');}).catch(function(e){toast(e.message || '取消失败，请重试。');});
+        break;
+      }
+
       case 'redeem-reward': {
         var reward = S.db.rewards.filter(function (x) { return x.id === id; })[0];
         if (!reward || !confirm('确定用自己的 ' + reward.pointsLabel + ' 分兑换「' + reward.name + '」吗？')) break;
@@ -2817,6 +2826,8 @@
         var f = el.getAttribute('data-f');
         var v = el.getAttribute('data-v');
         if (f === 'timesPerWeek') v = +v;
+        if (state.edit.kind === 'goal' && f === 'scope' && v === 'both') state.edit.rec.visibility = 'shared';
+        if (state.edit.kind === 'goal' && f === 'visibility' && v === 'private' && state.edit.rec.scope === 'both') { toast('共同目标需要双方可见；打卡记录仍可单独设为私密。'); return; }
         state.edit.rec[f] = v;
         refreshEdit();
         break;

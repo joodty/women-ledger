@@ -5,8 +5,8 @@
    - 个人愿望只扣自己的分，一个人就能兑
    - 记一笔每天最多发 3 分 */
 const {spawn}=require('node:child_process');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const assert=require('node:assert/strict');
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),'women-wallet-'));const base='http://127.0.0.1:18768';
-const proc=spawn(process.execPath,['server.cjs'],{cwd:path.join(__dirname,'..'),env:{...process.env,WOMEN_DATA_DIR:dir,PORT:'18768'},stdio:'pipe'});
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'women-wallet-'));const port=process.env.WOMEN_TEST_PORT||'24739',base='http://127.0.0.1:'+port;
+const proc=spawn(process.execPath,['server.cjs'],{cwd:path.join(__dirname,'..'),env:{...process.env,WOMEN_DATA_DIR:dir,PORT:port},stdio:'pipe'});
 async function req(url,body,cookie){const r=await fetch(base+url,{method:body?'POST':'GET',headers:{...(body?{Origin:base,'Content-Type':'application/json'}:{}),...(cookie?{Cookie:cookie}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
 const wallet=x=>x&&x.wallet==='ours'?'ours':'mine';
 function balance(data,slot,walletName){
@@ -65,17 +65,25 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  r=await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-a-2'},a.cookie);
  assert.equal(r.status,409,'已经发出去等他点头');
 
+ /* 双方确认前，如果申请内容变更，不得按照新价格扣分；可先取消旧申请。 */
+ s=await get(a.cookie);s.data.wishlist.find(x=>x.id==='w1').pointsLabel='12';assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
+ r=await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-b-changed'},b.cookie);assert.equal(r.status,409);assert.match(r.data.error,/已更改/);
+ r=await req('/api/redeem/cancel',{id:'req-a-1'},b.cookie);assert.equal(r.status,200);assert.equal(r.data.data.redemptions.find(x=>x.id==='req-a-1').status,'cancelled');assert.equal(balance(r.data.data,'me','ours'),6);
+ s=await get(a.cookie);s.data.wishlist.find(x=>x.id==='w1').pointsLabel='10';assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
+ assert.equal((await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-a-reopen'},a.cookie)).status,200);
+
  /* E. 对方点头才真正扣分，一人一半 */
  r=await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-b-1'},b.cookie);
  assert.equal(r.status,200,'对方确认');
  assert.equal(r.data.pending,false);
- const done=r.data.data.redemptions.find(x=>x.wishId==='w1');
+ const done=r.data.data.redemptions.find(x=>x.wishId==='w1'&&x.status==='done');
  assert.equal(done.status,'done');
  assert.equal(done.fromMe,5,'我出一半');
  assert.equal(done.fromHim,5,'他出一半');
  assert.equal(balance(r.data.data,'me','ours'),1);
  assert.equal(balance(r.data.data,'him','ours'),1);
  assert.equal(r.data.data.wishlist.find(x=>x.id==='w1').status,'redeemed');
+ const confirmedRevision=r.data.revision;const retry=await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-b-1'},b.cookie);assert.equal(retry.status,200);assert.equal(retry.data.revision,confirmedRevision);assert.equal(balance(retry.data.data,'me','ours'),1);
 
  /* F. 奇数分不能两个人兑 */
  s=await get(a.cookie);
