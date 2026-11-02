@@ -1706,10 +1706,10 @@
       '<div class="turn-badge">' + UI.icon('heart', 13) + '轮到你续写啦</div>' +
 
       '<div class="write-card">' +
-        '<textarea class="write-area" id="story-input" maxlength="60" ' +
-          'placeholder="接着上一段往下写 1–3 句…">' + esc(txt) + '</textarea>' +
+        '<textarea class="write-area" id="story-input" maxlength="10000" ' +
+          'placeholder="接着上一段往下写…">' + esc(txt) + '</textarea>' +
         '<div class="write-foot">' +
-          '<span class="write-count" id="story-count">写 1–3 句就好 · ' + txt.length + '/60</span>' +
+          '<span class="write-count" id="story-count">' + txt.length + '/10000</span>' +
           '<button class="spark-btn" data-act="spark">' + UI.icon('sparkle', 13) + '换个灵感（可选）</button>' +
         '</div>' +
       '</div>' +
@@ -2928,7 +2928,7 @@
         var ta = document.getElementById('story-input');
         if (ta) { ta.value = sp; state.storyDraft = sp; }
         var cnt = document.getElementById('story-count');
-        if (cnt) cnt.textContent = '写 1–3 句就好 · ' + sp.length + '/60';
+        if (cnt) cnt.textContent = sp.length + '/10000';
         toast('给了一个开头，不想接就再换一个。');
         break;
       }
@@ -2936,7 +2936,7 @@
       case 'publish': {
         var input = document.getElementById('story-input');
         var txt = input ? input.value.trim() : (state.storyDraft || '');
-        if (!txt) { toast('写 1–3 句就好。'); return; }
+        if (!txt) { toast('先写一点故事吧。'); return; }
         S.addStory('me', txt);
         state.storyDraft = '';
         nav('storyFull');
@@ -3098,7 +3098,7 @@
     if (t.id === 'story-input') {
       state.storyDraft = t.value;
       var sc = document.getElementById('story-count');
-      if (sc) sc.textContent = '写 1–3 句就好 · ' + t.value.length + '/60';
+      if (sc) sc.textContent = t.value.length + '/10000';
       return;
     }
   });

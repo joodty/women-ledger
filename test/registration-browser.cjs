@@ -9,6 +9,7 @@ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'women-register-ui-'));const base
  await register(a,base,'alice');await a.locator('#sync-message').filter({hasText:'已同步'}).waitFor();
  await a.locator('#tabbar [data-nav=points]').click();await a.getByRole('heading',{name:'兑换'}).waitFor();
  await a.locator('#tabbar [data-nav=together]').click();await a.locator('[data-go=past]').click();await a.locator('[data-go=story]').first().click();await a.getByText('我们的故事接龙').waitFor();
+ const longStory='故事'.repeat(5000);await a.locator('#story-input').fill(longStory);assert.equal(await a.locator('#story-count').textContent(),'10000/10000');await a.locator('[data-act=publish]').click();await a.locator('#sync-message').filter({hasText:'已同步'}).waitFor();await a.reload();await a.locator('[data-act=add]:visible').first().waitFor();assert.equal(await a.evaluate(()=>Store.db.story_entries[0].text),longStory);
  await a.locator('#tabbar [data-nav=today]').click();const gear=await a.getByRole('button',{name:'设置'}).boundingBox();assert.ok(gear&&gear.x>300,'mobile settings entry should be at the right edge');await a.getByRole('button',{name:'设置'}).click();await a.getByRole('heading',{name:'设置'}).waitFor();
  if(process.env.PREVIEW_SCREENSHOT){await a.locator('#tabbar [data-nav=today]').click();await a.screenshot({path:process.env.PREVIEW_SCREENSHOT});}
  const token=await a.evaluate(async()=>{const r=await fetch('/api/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});return (await r.json()).token});
