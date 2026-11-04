@@ -312,6 +312,9 @@ const server = spawn(process.execPath, ["server.cjs"], {
       b.getByRole("button", { name: "删除奖励：本机个人奖励", exact: true }),
     ).toHaveCount(0);
     await a
+      .getByRole("button", { name: "更多操作：本机个人奖励", exact: true })
+      .click();
+    await a
       .getByRole("button", { name: "删除奖励：本机个人奖励", exact: true })
       .click();
     await expect
@@ -325,6 +328,11 @@ const server = spawn(process.execPath, ["server.cjs"], {
       (x) => x.entryId === kept.id,
     );
     await a.goto(base + "/#/goals");
+    await a
+      .locator(".goal-card")
+      .filter({ hasText: "共同运动" })
+      .getByRole("button", { name: "更多操作：共同运动", exact: true })
+      .click();
     await a
       .locator(".goal-card")
       .filter({ hasText: "共同运动" })

@@ -14,6 +14,7 @@ const s = useSpace(),
   editing = ref<Goal>(),
   shared = ref(false),
   checkin = ref(""),
+  openAction = ref(""),
   archived = ref(false);
 const visible = computed(() =>
   s.data.goals.filter(
@@ -114,7 +115,15 @@ function remove(g: Goal) {
                 editor = true;
               "
             >
-              <Icon name="edit" :size="17" />
+              <Icon name="edit" :size="17" /></button
+            ><button
+              v-if="g.memberId === s.slot"
+              class="goal-dots"
+              :aria-label="'更多操作：' + g.name"
+              :aria-expanded="openAction === g.id"
+              @click="openAction = openAction === g.id ? '' : g.id"
+            >
+              <Icon name="down" :size="15" />
             </button>
           </div>
           <div class="kv">
@@ -174,7 +183,10 @@ function remove(g: Goal) {
               </button></span
             >
           </div>
-          <div v-if="g.memberId === s.slot" class="goal-more">
+          <div
+            v-if="g.memberId === s.slot && openAction === g.id"
+            class="goal-more"
+          >
             <button v-if="!archived" class="card-link" @click="archive(g)">
               结束并归档</button
             ><button class="card-link danger-text" @click="remove(g)">
@@ -193,9 +205,7 @@ function remove(g: Goal) {
           <Icon name="plus" :size="15" />新增约定 · {{ group.items.length }}/3
         </button>
       </section>
-      <div class="page-foot">
-        做到一次就去「记一笔」里选中它；归档或删除后，已有记录保留
-      </div>
+      <div class="page-foot">归档或删除后，已有记录保留</div>
       <GoalEditor
         v-if="editor"
         :goal="editing"

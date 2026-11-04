@@ -10,6 +10,7 @@ import Icon from "../components/Icon.vue";
 import type { Wish, Redemption } from "../models";
 const s = useSpace(),
   task = useTask();
+const each = (w: Wish) => (w.scope || "both") === "both";
 function gap(w: Wish) {
   const cost = Number(w.pointsLabel);
   if (!cost) return Infinity;
@@ -86,16 +87,15 @@ function reverse(r: Redemption) {
           <div class="pool-v" aria-label="我的共同积分">
             {{ s.balance(s.slot, "ours") }}
           </div>
+          <div class="pool-d">一起做的事 · 各出一半</div>
         </div>
         <div class="pool-cell him">
           <div class="pool-k">我的分</div>
           <div class="pool-v" aria-label="我的个人积分">
             {{ s.balance(s.slot) }}
           </div>
+          <div class="pool-d">只属于我的事</div>
         </div>
-      </div>
-      <div class="chip-hint" style="margin: 12px 0 0">
-        「我们的分」兑两个人一起做的事，各出一半；「我的分」兑只属于我的事。
       </div>
     </section>
     <section v-if="pending.length" class="card">
@@ -146,7 +146,7 @@ function reverse(r: Redemption) {
               :disabled="gap(w) > 0"
               @click="redeem(w)"
             >
-              {{ gap(w) > 0 ? `还差 ${gap(w)} 分` : "去兑换" }}</button
+              {{ gap(w) > 0 ? `${each(w) ? "各差" : "还差"} ${gap(w)} 分` : "去兑换" }}</button
             ><span v-else class="task-gap off">{{
               Number(w.pointsLabel) ? "对方来兑" : "没定分值"
             }}</span></span

@@ -12,6 +12,7 @@ const s = useSpace(),
   route = useRoute(),
   task = useTask(),
   editor = ref(false),
+  openWish = ref(""),
   editing = ref<Wish>();
 const reward = computed(() => route.path === "/rewards"),
   groups = computed(() =>
@@ -92,49 +93,59 @@ function redeem(w: Wish) {
             ><Icon :name="reward ? 'gift' : 'star'" :size="17" /></span
           ><span class="reward-k">{{ g.title }}</span>
         </div>
-        <article v-for="w in list(g.key)" :key="w.id" class="wish-item">
-          <span
-            class="wish-ico"
-            style="background: var(--pink-soft); color: var(--pink-deep)"
-            ><Icon :name="w.icon || 'star'" :size="19" /></span
-          ><span class="wish-main"
-            ><span class="wish-name">{{ w.name }}</span
-            ><span class="wish-meta"
-              >{{ w.pointsLabel }} 分 ·
-              {{
-                w.executor === "both"
-                  ? "我们一起"
-                  : s.member(w.executor || s.slot).name
-              }}<template v-if="w.status === 'redeemed' || w.status === 'done'">
-                · 已完成</template
+        <template v-for="w in list(g.key)" :key="w.id">
+          <article class="wish-item">
+            <span
+              class="wish-ico"
+              style="background: var(--pink-soft); color: var(--pink-deep)"
+              ><Icon :name="w.icon || 'star'" :size="19" /></span
+            ><span class="wish-main"
+              ><span class="wish-name">{{ w.name }}</span
+              ><span class="wish-meta"
+                >{{ w.pointsLabel }} 分 ·
+                {{
+                  w.executor === "both"
+                    ? "我们一起"
+                    : s.member(w.executor || s.slot).name
+                }}<template v-if="w.status === 'redeemed' || w.status === 'done'">
+                  · 已完成</template
+                ></span
               ></span
-            ></span
-          ><button
-            v-if="reward"
-            class="wish-btn"
-            :disabled="
-              !Number(w.pointsLabel) ||
-              s.balance(s.slot) < Number(w.pointsLabel)
-            "
-            @click="redeem(w)"
-          >
-            兑换</button
-          ><button
-            v-if="owned(w)"
-            class="re"
-            :aria-label="'修改' + (reward ? '奖励' : '愿望') + '：' + w.name"
-            @click="edit(w)"
-          >
-            <Icon name="edit" :size="15" /></button
-          ><button
-            v-if="owned(w)"
-            class="re danger-text"
-            :aria-label="'删除' + (reward ? '奖励' : '愿望') + '：' + w.name"
-            @click="remove(w)"
-          >
-            <Icon name="trash" :size="15" />
-          </button>
-        </article>
+            ><button
+              v-if="reward"
+              class="wish-btn"
+              :disabled="
+                !Number(w.pointsLabel) ||
+                s.balance(s.slot) < Number(w.pointsLabel)
+              "
+              @click="redeem(w)"
+            >
+              兑换</button
+            ><button
+              v-if="owned(w)"
+              class="row-dots"
+              :aria-label="'更多操作：' + w.name"
+              :aria-expanded="openWish === w.id"
+              @click="openWish = openWish === w.id ? '' : w.id"
+            >
+              <Icon name="down" :size="15" />
+            </button>
+          </article>
+          <div v-if="owned(w) && openWish === w.id" class="row-actions">
+            <button
+              :aria-label="'修改' + (reward ? '奖励' : '愿望') + '：' + w.name"
+              @click="edit(w)"
+            >
+              修改</button
+            ><button
+              class="danger-text"
+              :aria-label="'删除' + (reward ? '奖励' : '愿望') + '：' + w.name"
+              @click="remove(w)"
+            >
+              删除
+            </button>
+          </div>
+        </template>
         <div v-if="!list(g.key).length" class="empty">
           这里还没有{{ reward ? "奖励" : "愿望" }}。
         </div>

@@ -144,7 +144,9 @@ function remove() {
             f.timesPerWeek
           }}</span>
         </div>
-        <div class="chip-hint">记一笔时选中这个约定，就会计入本周进度。</div>
+        <div class="chip-hint">
+          点约定上的「记一次打卡」，或记一笔时选中它，都会计入本周进度。
+        </div>
       </div>
       <div class="field">
         <div class="field-k">做到一次几分</div>

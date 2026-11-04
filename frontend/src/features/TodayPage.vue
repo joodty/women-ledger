@@ -102,7 +102,7 @@ function edit(e: Entry) {
                 : `本周 ${s.progress(g)}/${g.timesPerWeek || 1}`
           }}</span
         ></RouterLink
-      ><RouterLink v-if="restGoals" class="goal-more" to="/goals"
+      ><RouterLink v-if="restGoals" class="goal-fold" to="/goals"
         >还有 {{ restGoals }} 个约定 ›</RouterLink
       ><button
         v-if="!goals.length"

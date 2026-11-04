@@ -213,6 +213,11 @@ function config() {
             has: page.locator(".goal-name").filter({ hasText: item.name }),
           });
         await ui("cleanup previous own QA goal", () =>
+          row
+            .getByRole("button", { name: "更多操作：" + item.name, exact: true })
+            .click(),
+        );
+        await ui("cleanup previous own QA goal", () =>
           row.getByRole("button", { name: "删除", exact: true }).click(),
         );
         await expect
@@ -594,6 +599,9 @@ function config() {
     }
     await refresh(a, "/rewards");
     await a
+      .getByRole("button", { name: "更多操作：" + rewardName, exact: true })
+      .click();
+    await a
       .getByRole("button", { name: "删除奖励：" + rewardName, exact: true })
       .click();
     await expect
@@ -610,6 +618,9 @@ function config() {
       (p) => p.entryId === entry.id,
     );
     await refresh(a, "/goals");
+    await goal
+      .getByRole("button", { name: "更多操作：" + goalName, exact: true })
+      .click();
     await goal.getByRole("button", { name: "删除", exact: true }).click();
     await expect
       .poll(async () =>

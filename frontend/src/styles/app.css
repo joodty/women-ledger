@@ -645,8 +645,8 @@ button:disabled {
 .prog-row.goal-done {
   opacity: 0.5;
 }
-/* 超过三行折成一行字，不给按钮感 */
-.goal-more {
+/* 今天页：超过三行折成一行字，不给按钮感（类名别用 goal-more，那是约定页的操作区） */
+.goal-fold {
   display: block;
   width: 100%;
   margin-top: 6px;
@@ -660,7 +660,7 @@ button:disabled {
   letter-spacing: 0.2px;
   cursor: pointer;
 }
-.goal-more:active {
+.goal-fold:active {
   color: var(--pink-deep);
 }
 
@@ -714,25 +714,51 @@ button:disabled {
 .tl {
   display: grid;
 }
+/* 每一行都画一小段竖线，行与行首尾相接，整列就是一条不断的时间轴；
+   第一行从圆点中心起、最后一行到圆点中心止，两头都不外露。 */
 .tl-row {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 7px;
   padding: 7px 0;
 }
+.tl-row::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-2);
+}
+.tl-group:first-child .tl-row:first-child::before {
+  top: 17.5px;
+}
+.tl-group:last-child .tl-row:last-child::before {
+  bottom: calc(100% - 17.5px);
+}
 .tl-group + .tl-group .tl-row:first-child {
   padding-top: 14px;
 }
+.tl-rail {
+  position: relative;
+  width: 7px;
+  flex: 0 0 auto;
+  align-self: stretch;
+}
 .tl-dot {
+  position: absolute;
+  left: 0;
+  top: 7px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--pink-deep);
-  margin-top: 7px;
-  flex: 0 0 auto;
 }
+/* 兑换是空心点，必须用卡片底色把竖线挡掉，否则线会从圆心穿过去 */
 .tl-dot.open {
-  background: transparent;
+  background: var(--card);
   border: 1px solid var(--ink-4);
 }
 .tl-month {
@@ -815,4 +841,57 @@ button:disabled {
   font-size: 12px;
   color: var(--ink-3);
   letter-spacing: 0.2px;
+}
+
+/* ---------------- 「更多」统一收成一个下拉 ---------------- */
+/* 约定卡右上角、奖励行尾都用它：一点展开，再点收起 */
+.goal-dots,
+.row-dots {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 2px;
+  color: var(--ink-4);
+  cursor: pointer;
+}
+.goal-dots:active,
+.row-dots:active {
+  color: var(--ink-2);
+}
+/* 展开后才出现的「修改 / 删除」：不占位、不进主视线 */
+.row-actions {
+  display: flex;
+  gap: 18px;
+  padding: 2px 0 10px 51px;
+}
+.row-actions button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--pink-ink);
+  cursor: pointer;
+}
+.row-actions .danger-text {
+  color: var(--pink-deep);
+}
+
+/* ---------------- 兑换页 · 积分卡下的一句用途 ---------------- */
+.pool-d {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-2);
+  letter-spacing: 0.2px;
+  opacity: 0.75;
+}
+
+/* 进度条变细，别再抢戏；要读的是旁边那个数字 */
+.task-bar,
+.task-bar i {
+  height: 2px;
+}
+.wish-btn {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }

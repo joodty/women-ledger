@@ -30,7 +30,9 @@ function pick(e: HistoryItem, action: "edit" | "remove") {
         class="tl-row"
         :data-history="e.source"
       >
-        <span class="tl-dot" :class="{ open: e.kind === 'redeem' }"></span>
+        <span class="tl-rail"
+          ><span class="tl-dot" :class="{ open: e.kind === 'redeem' }"></span
+        ></span>
         <span v-if="i === 0" class="tl-month">{{ g.label }}</span
         ><span v-else class="tl-month"></span>
         <span class="tl-main">
