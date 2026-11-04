@@ -1162,7 +1162,7 @@ svg {
   border-radius: 5px;
 }
 .bar-val {
-  width: 74px;
+  width: 64px;
   text-align: right;
   white-space: nowrap;
   font-family: var(--mono);

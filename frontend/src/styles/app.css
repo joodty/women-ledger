@@ -710,7 +710,7 @@ button:disabled {
   border-radius: 3px;
 }
 .td-val {
-  width: 74px;
+  width: 64px;
   flex: 0 0 auto;
   text-align: right;
   white-space: nowrap;
