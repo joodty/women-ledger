@@ -16,6 +16,6 @@ export function weekStart() {
 }
 export function duration(minutes: number) {
   return minutes >= 60
-    ? `${Math.floor(minutes / 60)} 小时${minutes % 60 ? " " + (minutes % 60) + " 分" : ""}`
-    : `${minutes} 分`;
+    ? `${Math.floor(minutes / 60)}小时${minutes % 60 ? (minutes % 60) + "分" : ""}`
+    : `${minutes}分`;
 }

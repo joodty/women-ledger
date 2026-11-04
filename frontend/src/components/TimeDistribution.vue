@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useSpace } from "../stores/space";
 import type { Entry } from "../models";
+import { duration } from "../lib/date";
 const props = defineProps<{ entries: Entry[] }>(),
   s = useSpace();
 const rows = computed(() =>
@@ -18,7 +19,6 @@ const rows = computed(() =>
     .sort((a, b) => b.minutes - a.minutes),
 );
 const max = computed(() => Math.max(1, ...rows.value.map((c) => c.minutes)));
-const hours = (m: number) => (m ? Math.round(m / 6) / 10 + "h" : "0分");
 </script>
 <template>
   <div class="td">
@@ -33,7 +33,7 @@ const hours = (m: number) => (m ? Math.round(m / 6) / 10 + "h" : "0分");
           }"
         ></span
       ></span>
-      <span class="td-val">{{ hours(c.minutes) }}</span>
+      <span class="td-val">{{ duration(c.minutes) }}</span>
     </div>
   </div>
 </template>

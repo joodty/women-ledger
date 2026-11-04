@@ -148,7 +148,7 @@ const selfTime = computed(() =>
               background: c.color,
             }"
           ></i></span
-        ><span class="bar-val">{{ Math.round(c.minutes / 6) / 10 }}h</span>
+        ><span class="bar-val">{{ duration(c.minutes) }}</span>
       </div>
       <div v-if="!distribution.length" class="empty">这个月还没有记录。</div>
       <div class="self-line">

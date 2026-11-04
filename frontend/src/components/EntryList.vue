@@ -4,6 +4,7 @@ import { useSpace } from "../stores/space";
 import type { Entry } from "../models";
 import Icon from "./Icon.vue";
 import { catIcon, rgba } from "../lib/presentation";
+import { duration } from "../lib/date";
 const props = defineProps<{
   entries: Entry[];
   editable?: boolean;
@@ -48,7 +49,7 @@ const cat = (e: Entry) =>
             class="entry-chip"
             :style="{ background: rgba(cat(e).color), color: cat(e).color }"
             >{{ cat(e).name }}</span
-          ><span class="entry-dur">{{ Math.round(e.minutes / 6) / 10 }}h</span>
+          ><span class="entry-dur">{{ duration(e.minutes) }}</span>
         </div>
         <div class="entry-text">{{ e.content }}</div>
         <div v-if="e.visibility === 'private'" class="entry-private">

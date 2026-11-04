@@ -710,9 +710,10 @@ button:disabled {
   border-radius: 3px;
 }
 .td-val {
-  width: 40px;
+  width: 74px;
   flex: 0 0 auto;
   text-align: right;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
