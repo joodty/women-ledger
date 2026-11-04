@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useSpace } from "../stores/space";
-import type { Entry, Slot } from "../models";
+import type { Entry, Goal, Slot } from "../models";
 import Icon from "../components/Icon.vue";
 import MemberAvatar from "../components/MemberAvatar.vue";
-import CoupleStatus from "../components/CoupleStatus.vue";
 import EntryList from "../components/EntryList.vue";
 import TimeDistribution from "../components/TimeDistribution.vue";
 import RecordEditor from "./records/RecordEditor.vue";
@@ -30,9 +29,24 @@ const goals = computed(() =>
       g.status === "active" && (g.memberId === s.slot || g.scope === "both"),
   ),
 );
+/* 到没到量：一次就完看有没有做过一次，每周要做看本周次数够不够 */
+const target = (g: Goal) => (g.kind === "once" ? 1 : g.timesPerWeek || 1);
+const reached = (g: Goal) => s.progress(g) >= target(g);
+/* 没做到的排前面，做过的沉到底部；不隐藏任何一条，超出三行的折成一行字 */
+const goalsSorted = computed(() =>
+  goals.value
+    .slice()
+    .sort((a, b) => Number(reached(a)) - Number(reached(b))),
+);
+const shownGoals = computed(() => goalsSorted.value.slice(0, 3));
+const restGoals = computed(() => goalsSorted.value.length - shownGoals.value.length);
 const unclassified = computed(() =>
   rows.value.filter((e) => !e.categoryId || e.categoryId === "none"),
 );
+const other = computed(() => (side.value === s.slot ? s.other : s.slot));
+function switchSide() {
+  side.value = other.value;
+}
 function add() {
   editing.value = undefined;
   editor.value = true;
@@ -60,37 +74,24 @@ function edit(e: Entry) {
       <h1 class="page-title">今天，过得怎么样？</h1>
       <p class="page-sub">记一两行就好。</p>
     </div>
-    <CoupleStatus />
-    <div class="pair-tabs">
-      <button
-        class="pair-tab"
-        :class="{ on: side === s.slot }"
-        @click="side = s.slot"
-      >
-        {{ s.member(s.slot).name }}的空间</button
-      ><button
-        class="pair-tab him"
-        :class="{ on: side === s.other }"
-        @click="side = s.other"
-      >
-        {{ s.member(s.other).name }}的空间
-      </button>
-    </div>
     <section v-if="side === s.slot" class="card">
       <div class="card-title">
         约定<RouterLink class="card-link" to="/goals"
           >管理<Icon name="right" :size="12"
         /></RouterLink>
       </div>
-      <RouterLink v-for="g in goals" :key="g.id" class="prog-row" to="/goals"
+      <RouterLink
+        v-for="g in shownGoals"
+        :key="g.id"
+        class="prog-row"
+        :class="{ 'goal-done': reached(g) }"
+        to="/goals"
         ><span class="prog-main"
           ><span class="prog-name">{{ g.name }}</span></span
         ><span v-if="g.scope === 'both'" class="task-who">我们的</span
         ><span
           class="goal-p"
-          :class="{
-            ok: s.progress(g) >= (g.kind === 'once' ? 1 : g.timesPerWeek || 1),
-          }"
+          :class="{ ok: reached(g) }"
           >{{
             g.joined === false
               ? "等待加入"
@@ -101,6 +102,8 @@ function edit(e: Entry) {
                 : `本周 ${s.progress(g)}/${g.timesPerWeek || 1}`
           }}</span
         ></RouterLink
+      ><RouterLink v-if="restGoals" class="goal-more" to="/goals"
+        >还有 {{ restGoals }} 个约定 ›</RouterLink
       ><button
         v-if="!goals.length"
         class="add-block"
@@ -116,7 +119,15 @@ function edit(e: Entry) {
             >{{ s.member(side).name }} ·
             {{ side === s.slot ? "我的记录" : "对方分享的记录" }}</span
           ></span
-        >
+        ><button
+          class="side-switch"
+          type="button"
+          :aria-label="'看' + s.member(other).name + '的记录'"
+          @click="switchSide"
+          ><MemberAvatar :member="s.member(other)" :size="22" /><Icon
+            name="right"
+            :size="11"
+        /></button>
       </div>
       <EntryList :entries="rows" :editable="side === s.slot" @edit="edit" />
     </section>

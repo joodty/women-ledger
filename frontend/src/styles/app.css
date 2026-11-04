@@ -623,3 +623,196 @@ button:disabled {
   text-align: left;
   color: var(--ink);
 }
+
+/* ---------------- 今天页 · 记录卡右上角切人 ---------------- */
+/* 两个「某某的空间」tab 换成一个头像：点一下看对方，再点一下回来 */
+.side-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: 0;
+  padding: 2px 0 2px 6px;
+  color: var(--ink-4);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.side-switch:active {
+  opacity: 0.55;
+}
+
+/* 今天页约定：做到的沉到底部并淡下去，但仍然看得见 */
+.prog-row.goal-done {
+  opacity: 0.5;
+}
+/* 超过三行折成一行字，不给按钮感 */
+.goal-more {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 9px 0 1px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  font-size: 12px;
+  color: var(--ink-3);
+  letter-spacing: 0.2px;
+  cursor: pointer;
+}
+.goal-more:active {
+  color: var(--pink-deep);
+}
+
+/* ---------------- 时间分布 · 按时长降序的行 ---------------- */
+.td {
+  display: grid;
+  gap: 9px;
+}
+.td-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.td-bar {
+  width: 3px;
+  height: 15px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+.td-name {
+  width: 48px;
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.td-name.dim {
+  color: var(--ink-3);
+}
+.td-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--gray-soft);
+  overflow: hidden;
+}
+.td-track > span {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+}
+.td-val {
+  width: 40px;
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: 12px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- 一起做过的 · 时间线（摘要与全量共用一套） ---------------- */
+.tl {
+  display: grid;
+}
+.tl-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 0;
+}
+.tl-group + .tl-group .tl-row:first-child {
+  padding-top: 14px;
+}
+.tl-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pink-deep);
+  margin-top: 7px;
+  flex: 0 0 auto;
+}
+.tl-dot.open {
+  background: transparent;
+  border: 1px solid var(--ink-4);
+}
+.tl-month {
+  width: 32px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.2px;
+}
+.tl-main {
+  flex: 1;
+  min-width: 0;
+}
+.tl-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.tl-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+.tl-tag {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 400;
+}
+.tl-tag.meet {
+  background: var(--pink-soft);
+  color: var(--pink-ink);
+}
+.tl-tag.gift {
+  background: var(--gray-soft);
+  color: var(--ink-2);
+}
+.tl-note {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.tl-more {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  color: var(--ink-4);
+  cursor: pointer;
+}
+.tl-more:active {
+  color: var(--ink-2);
+}
+.tl-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 7px;
+}
+.tl-actions button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--pink-ink);
+  cursor: pointer;
+}
+.tl-actions .danger-text {
+  color: var(--pink-deep);
+}
+.tl-total {
+  margin: 0 0 10px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+  letter-spacing: 0.2px;
+}
