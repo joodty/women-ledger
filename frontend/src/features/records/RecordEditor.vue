@@ -186,14 +186,6 @@ function remove() {
           <option value="shared">双方可见</option>
         </select></label
       >
-      <label class="field"
-        ><span class="field-k">备注<i>选填</i></span
-        ><input
-          v-model="f.note"
-          class="input-box"
-          maxlength="10000"
-          placeholder="身体信号…"
-      /></label>
       <div class="field">
         <div class="field-k">今天的快乐值<i>选填</i></div>
         <div class="happy-row" role="group" aria-label="快乐值">
@@ -209,8 +201,16 @@ function remove() {
             {{ n }}
           </button>
         </div>
-        <div class="chip-hint">低分的时段会在回看页单独列出来</div>
+        <div class="chip-hint">回看页会按天连成一条线。</div>
       </div>
+      <label class="field"
+        ><span class="field-k">备注<i>选填</i></span
+        ><input
+          v-model="f.note"
+          class="input-box"
+          maxlength="10000"
+          placeholder="身体、心情，或者别的事…"
+      /></label>
       <p class="v2-error" role="alert">{{ warning || task.error.value }}</p>
       <button class="btn-primary" :disabled="task.busy.value">
         {{ entry ? "保存修改" : "保存记录" }}</button

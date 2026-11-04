@@ -398,6 +398,9 @@ p {
 .review-col .entry-dur {
   display: none;
 }
+.review-col .entry-score {
+  font-size: 10.5px;
+}
 .review-col .empty {
   font-size: 12px;
   padding: 14px 0;
@@ -409,6 +412,11 @@ p {
 }
 .mood-chart [role="button"] {
   cursor: pointer;
+  outline: none;
+}
+.mood-chart [role="button"]:focus-visible {
+  outline: 1.5px solid var(--pink);
+  outline-offset: 2px;
 }
 .danger-text,
 .danger-action {

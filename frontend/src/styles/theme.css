@@ -445,6 +445,24 @@ svg {
   color: var(--ink-3);
   margin-left: auto;
 }
+.entry-score {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  flex: none;
+  white-space: nowrap;
+}
+.entry-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.entry-foot .entry-bar {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
 .entry-chip {
   font-size: 11px;
   padding: 1.5px 8px;
@@ -1177,40 +1195,6 @@ svg {
   width: 100%;
   height: auto;
   display: block;
-}
-.chart-tip {
-  font-size: 12px;
-  color: var(--ink-3);
-  margin-top: 6px;
-}
-
-.low-list {
-  margin-top: 10px;
-  border-top: 1px dashed var(--line-2);
-  padding-top: 10px;
-}
-.low-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 0;
-  font-size: 13px;
-}
-.low-item .t {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-3);
-}
-.low-item .c {
-  font-size: 11px;
-  padding: 1px 7px;
-  border-radius: 8px;
-}
-.low-item .s {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--pink-deep);
 }
 .filter-btn {
   display: inline-flex;

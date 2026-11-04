@@ -15,9 +15,11 @@ const s = useSpace(),
   month = ref(today().slice(0, 7)),
   selected = ref(today()),
   scope = ref<Slot | "all">("all"),
-  happyDay = ref(""),
-  low = ref(false),
   editing = ref<Entry>();
+const selectDay = (date: string) => {
+  selected.value = date;
+  month.value = date.slice(0, 7);
+};
 const dayRows = (slot: Slot) =>
   s.data.entries
     .filter((e) => e.date === selected.value && e.memberId === slot)
@@ -57,17 +59,6 @@ const series = computed(() =>
         : null,
     };
   }),
-);
-const lows = computed(() =>
-  s.data.entries.filter(
-    (e) =>
-      e.happy &&
-      e.happy <= 2 &&
-      e.memberId === (scope.value === s.other ? s.other : s.slot) &&
-      (happyDay.value
-        ? e.date === happyDay.value
-        : e.date >= shift(today(), -6) && e.date <= today()),
-  ),
 );
 const selfTime = computed(() =>
   s.data.entries
@@ -113,6 +104,7 @@ const selfTime = computed(() =>
           <EntryList
             :entries="dayRows(slot)"
             :editable="slot === s.slot"
+            show-score
             @edit="editing = $event"
           />
         </div>
@@ -164,43 +156,15 @@ const selfTime = computed(() =>
       </div>
     </section>
     <section class="card">
-      <div class="card-title">
-        快乐值<span class="sub">近 7 天</span
-        ><button
-          class="card-link"
-          @click="
-            low = !low;
-            happyDay = '';
-          "
-        >
-          {{ low ? "收起低分记录" : "看看低分记录" }}
-        </button>
-      </div>
-      <template v-if="series.some((p) => p.value !== null)"
-        ><MoodChart
-          :series="series"
-          :selected="happyDay"
-          @select="
-            happyDay = $event;
-            low = true;
-          "
-        />
-        <div class="chart-tip">
-          点某一天 → 看那天的低分记录。不做评价，也不扣分。
-        </div></template
-      >
+      <div class="card-title">快乐值<span class="sub">近 7 天</span></div>
+      <MoodChart
+        v-if="series.some((p) => p.value !== null)"
+        :series="series"
+        :selected="selected"
+        @select="selectDay"
+      />
       <div v-else class="empty">
         近 7 天还没有快乐值记录。<br />记一笔的时候可以顺手打一个分。
-      </div>
-      <div v-if="low" class="low-list">
-        <div v-for="e in lows" :key="e.id" class="low-item">
-          <span class="t">{{ monthDay(e.date) }}</span
-          ><span>{{ e.content }}</span
-          ><span class="s">{{ e.happy }} 分</span>
-        </div>
-        <p v-if="!lows.length" class="chip-hint">
-          {{ happyDay ? monthDay(happyDay) : "近 7 天" }}没有低分记录。
-        </p>
       </div>
     </section>
     <RecordEditor

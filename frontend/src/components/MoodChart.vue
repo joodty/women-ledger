@@ -35,7 +35,7 @@ const areas = computed(() => {
     class="mood-chart"
     viewBox="0 0 320 128"
     role="img"
-    aria-label="近七天快乐值折线，点击日期查看低分记录"
+    aria-label="近七天快乐值折线，点击日期查看那天"
   >
     <path
       v-for="(area, i) in areas"

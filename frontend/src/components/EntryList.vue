@@ -4,7 +4,11 @@ import { useSpace } from "../stores/space";
 import type { Entry } from "../models";
 import Icon from "./Icon.vue";
 import { catIcon, rgba } from "../lib/presentation";
-const props = defineProps<{ entries: Entry[]; editable?: boolean }>();
+const props = defineProps<{
+  entries: Entry[];
+  editable?: boolean;
+  showScore?: boolean;
+}>();
 const emit = defineEmits<{ edit: [entry: Entry] }>();
 const s = useSpace(),
   total = computed(() => props.entries.reduce((n, e) => n + e.minutes, 0));
@@ -50,13 +54,18 @@ const cat = (e: Entry) =>
         <div v-if="e.visibility === 'private'" class="entry-private">
           仅自己可见
         </div>
-        <div class="entry-bar">
-          <i
-            :style="{
-              width: Math.min(100, (e.minutes / (total || 1)) * 100) + '%',
-              background: cat(e).color,
-            }"
-          ></i>
+        <div class="entry-foot">
+          <div class="entry-bar">
+            <i
+              :style="{
+                width: Math.min(100, (e.minutes / (total || 1)) * 100) + '%',
+                background: cat(e).color,
+              }"
+            ></i>
+          </div>
+          <span v-if="showScore && e.happy" class="entry-score"
+            >{{ e.happy }} 分</span
+          >
         </div>
       </div>
       <div v-if="editable" class="entry-arrow">
