@@ -168,16 +168,9 @@ function reverse(r: Redemption) {
         ></span>
       </article>
       <div v-if="!wishes.length" class="empty">
-        还没有想做的事。<br />去「一起」加一个，再来这里兑。
+        还没有想做的事。<br />点右上角「管理」，加一条。
       </div>
     </section>
-    <RouterLink to="/wishlist" class="list-row reward-link"
-      ><span class="list-ico"><Icon name="star" :size="19" /></span
-      ><span class="list-main"
-        ><span class="list-k">愿望清单</span
-        ><span class="list-d">想到什么就加一条，攒够分再兑</span></span
-      ><Icon name="right" :size="16"
-    /></RouterLink>
     <section class="card">
       <div class="card-title">兑换记录</div>
       <article v-for="r in history" :key="r.id" class="prog-row">
