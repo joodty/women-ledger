@@ -13,7 +13,7 @@ const s = useSpace(),
   editor = ref(false),
   editing = ref<Goal>(),
   shared = ref(false),
-  { log: logGoal } = useGoalCheckin(),
+  { justLogged, log: logGoal, undo: undoGoal } = useGoalCheckin(),
   openAction = ref(""),
   archived = ref(false);
 const visible = computed(() =>
@@ -175,7 +175,14 @@ function remove(g: Goal) {
               >
                 加入</button
               ><button
-                v-if="g.joined !== false && !archived"
+                v-if="justLogged[g.id]"
+                class="btn-mini undo"
+                :aria-label="'撤销刚才记的：' + g.name"
+                @click="undoGoal(g)"
+              >
+                撤销</button
+              ><button
+                v-else-if="g.joined !== false && !archived"
                 class="btn-mini"
                 :disabled="s.reached(g)"
                 :aria-label="
