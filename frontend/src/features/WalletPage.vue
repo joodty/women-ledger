@@ -5,11 +5,14 @@ import { useTask } from "../lib/task";
 import { post } from "../lib/api";
 import { confirmCommand } from "../lib/confirmCommand";
 import { monthDay } from "../lib/presentation";
+import { useWishes } from "../lib/wishes";
+import type { WishItem } from "../lib/wishes";
 import PageHead from "../components/PageHead.vue";
 import Icon from "../components/Icon.vue";
 import type { Wish, Redemption } from "../models";
 const s = useSpace(),
-  task = useTask();
+  task = useTask(),
+  { all, kindOf, isDone } = useWishes();
 const each = (w: Wish) => (w.scope || "both") === "both";
 function gap(w: Wish) {
   const cost = Number(w.pointsLabel);
@@ -24,11 +27,9 @@ function gap(w: Wish) {
     : Math.max(0, cost - s.balance(s.slot));
 }
 const wishes = computed(() =>
-  s.data.wishlist
-    .filter((w) => !["redeemed", "done"].includes(w.status || ""))
-    .slice()
-    .sort((a, b) => gap(a) - gap(b)),
+  all.value.filter((w) => !isDone(w)).slice().sort((a, b) => gap(a) - gap(b)),
 );
+const byId = (id?: string) => all.value.find((w) => w.id === id);
 const pending = computed(() =>
   s.data.redemptions.filter((r) => r.status === "pending"),
 );
@@ -42,7 +43,7 @@ const history = computed(() =>
     .slice()
     .reverse(),
 );
-function redeem(w: Wish) {
+function redeem(w: WishItem) {
   if (
     confirm(
       (w.scope || "both") === "both"
@@ -51,7 +52,7 @@ function redeem(w: Wish) {
     )
   )
     task.run(async () => {
-      await s.redeem("wish", w.id);
+      await s.redeem(kindOf(w), w.id);
       s.notice = "兑换请求已处理";
     });
 }
@@ -112,12 +113,9 @@ function reverse(r: Redemption) {
               : "对方发起 · 等你点头"
           }}</span></span
         ><button
-          v-if="
-            r.memberId !== s.slot &&
-            s.data.wishlist.some((w) => w.id === r.wishId)
-          "
+          v-if="r.memberId !== s.slot && byId(r.wishId)"
           class="wish-btn"
-          @click="redeem(s.data.wishlist.find((w) => w.id === r.wishId)!)"
+          @click="redeem(byId(r.wishId)!)"
         >
           去确认</button
         ><button class="wish-btn saving" @click="cancel(r)">取消申请</button>
@@ -172,11 +170,11 @@ function reverse(r: Redemption) {
         还没有想做的事。<br />去「一起」加一个，再来这里兑。
       </div>
     </section>
-    <RouterLink to="/rewards" class="list-row reward-link"
-      ><span class="list-ico"><Icon name="gift" :size="19" /></span
+    <RouterLink to="/wishlist" class="list-row reward-link"
+      ><span class="list-ico"><Icon name="star" :size="19" /></span
       ><span class="list-main"
-        ><span class="list-k">奖励清单</span
-        ><span class="list-d">给认真生活一点小奖励</span></span
+        ><span class="list-k">愿望清单</span
+        ><span class="list-d">想到什么就加一条，攒够分再兑</span></span
       ><Icon name="right" :size="16"
     /></RouterLink>
     <section class="card">

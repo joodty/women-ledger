@@ -300,28 +300,36 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect
       .poll(async () => (await snapshot(a)).data.wishlist.length)
       .toBe(0);
-    await a.goto(base + "/#/rewards");
-    await a.getByRole("button", { name: "新增奖励", exact: true }).click();
-    await a
-      .getByRole("dialog", { name: "新增奖励", exact: true })
-      .getByLabel("名称", { exact: true })
-      .fill("本机个人奖励");
-    await a.getByLabel("需要的积分", { exact: true }).fill("4");
-    await a.getByRole("button", { name: "保存", exact: true }).click();
-    await expect(a.getByRole("dialog")).toHaveCount(0);
-    await b.goto(base + "/#/rewards");
+    /* 2026-11-05 愿望与奖励合并：/rewards 下线，老的 rewards 冻结只读并入愿望清单 */
+    const seeded = await snapshot(a);
+    seeded.data.rewards.push({
+      id: "legacy-reward",
+      name: "以前的小奖励",
+      pointsLabel: "4",
+      executor: "me",
+      status: "open",
+    });
+    assert.equal(
+      (
+        await a.request.post(base + "/api/state", {
+          data: { revision: seeded.revision, data: seeded.data },
+          headers: { Origin: base },
+        })
+      ).status(),
+      200,
+    );
+    await a.goto(base + "/#/wishlist");
+    await a.reload();
+    const legacy = a.locator(".wi-row").filter({ hasText: "以前的小奖励" });
+    await expect(legacy).toContainText("以前的奖励");
     await expect(
-      b.getByRole("button", { name: "删除奖励：本机个人奖励", exact: true }),
+      legacy.getByRole("button", {
+        name: "删除愿望：以前的小奖励",
+        exact: true,
+      }),
     ).toHaveCount(0);
-    await a
-      .getByRole("button", { name: "更多操作：本机个人奖励", exact: true })
-      .click();
-    await a
-      .getByRole("button", { name: "删除奖励：本机个人奖励", exact: true })
-      .click();
-    await expect
-      .poll(async () => (await snapshot(a)).data.rewards.length)
-      .toBe(0);
+    await a.goto(base + "/#/rewards");
+    await expect.poll(() => a.url()).toBe(base + "/#/");
 
     const kept = (await snapshot(b)).data.entries.find(
       (x) => x.content === "对方打卡",
@@ -371,7 +379,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
       });
     }
     console.log(
-      "PASS: restored mobile UI, two users, voice/10000 characters, offline/legacy recovery, story ownership and safe record/goal/category/wish/reward deletion",
+      "PASS: restored mobile UI, two users, voice/10000 characters, offline/legacy recovery, story ownership and safe record/goal/category/wish deletion, frozen legacy rewards",
     );
   } finally {
     if (browser) await browser.close();

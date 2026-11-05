@@ -343,40 +343,47 @@ function config() {
       Number.isFinite(balance) && balance >= 3 && balance < 10000,
       "QA wallet has unexpected balance; review the dedicated test space",
     );
-    const rewardName = run + "-余额不足奖励";
-    await refresh(a, "/rewards");
-    await a.getByRole("button", { name: "新增奖励", exact: true }).click();
-    const rewardDialog = a.getByRole("dialog", {
-      name: "新增奖励",
+    const wishName = run + "-余额不足愿望";
+    await refresh(a, "/wishlist");
+    await a.getByRole("button", { name: "新增愿望", exact: true }).click();
+    const wishDialog = a.getByRole("dialog", {
+      name: "新增愿望",
       exact: true,
     });
-    await ui("reward: fill name", () =>
-      rewardDialog.getByLabel("名称").fill(rewardName),
+    await ui("wish: fill name", () =>
+      wishDialog.getByLabel("名称").fill(wishName),
     );
-    await ui("reward: set unaffordable price", () =>
-      rewardDialog
+    await ui("wish: set unaffordable price", () =>
+      wishDialog
         .getByLabel("需要的积分")
         .fill(String(Math.min(10000, balance + 100))),
     );
-    await rewardDialog
+    await ui("wish: make it personal", () =>
+      wishDialog
+        .getByRole("group", { name: "属于谁", exact: true })
+        .getByRole("button", { name: "只属于我", exact: true })
+        .click(),
+    );
+    await wishDialog
       .getByRole("button", { name: "保存", exact: true })
       .click();
-    await expect(rewardDialog).toHaveCount(0);
-    const reward = a
+    await expect(wishDialog).toHaveCount(0);
+    await refresh(a, "/points");
+    const wish = a
       .locator("article.wish-item")
-      .filter({ hasText: rewardName });
+      .filter({ hasText: wishName });
     await expect(
-      reward.getByRole("button", { name: "兑换", exact: true }),
+      wish.getByRole("button", { name: /^还差 \d+ 分$/ }),
     ).toBeDisabled();
     check(
-      !(await snapshot(a)).data.redemptions.some((r) => r.name === rewardName),
-      "Unaffordable reward unexpectedly redeemed",
+      !(await snapshot(a)).data.redemptions.some((r) => r.name === wishName),
+      "Unaffordable wish unexpectedly redeemed",
     );
     await a.screenshot({
       path: path.join(output, "insufficient-points-disabled.png"),
       fullPage: true,
     });
-    recordCheck("页面显示个人积分，余额不足的奖励兑换按钮禁用且无兑换流水");
+    recordCheck("页面显示个人积分，余额不足的愿望兑换按钮禁用且无兑换流水");
 
     step = "concurrent UI submission";
     const textA = run + "-A同时新增",
@@ -584,16 +591,13 @@ function config() {
         .toBe(false);
       await expect(page.getByRole("dialog")).toHaveCount(0);
     }
-    await refresh(a, "/rewards");
+    await refresh(a, "/wishlist");
     await a
-      .getByRole("button", { name: "更多操作：" + rewardName, exact: true })
-      .click();
-    await a
-      .getByRole("button", { name: "删除奖励：" + rewardName, exact: true })
+      .getByRole("button", { name: "删除愿望：" + wishName, exact: true })
       .click();
     await expect
       .poll(async () =>
-        (await snapshot(a)).data.rewards.some((w) => w.name === rewardName),
+        (await snapshot(a)).data.wishlist.some((w) => w.name === wishName),
       )
       .toBe(false);
     for (const text of [firstText, secondText, textA, categorizedText])
@@ -629,7 +633,7 @@ function config() {
     );
     await deleteCurrentRecord(a, checkinText);
     recordCheck(
-      "页面删除本次记录/奖励/约定；删除约定保留打卡及积分，再单独删除本次打卡",
+      "页面删除本次记录/愿望/约定；删除约定保留打卡及积分，再单独删除本次打卡",
     );
     check(errors.length === 0, "Browser JavaScript errors occurred");
     recordCheck("上述流程没有浏览器未捕获脚本错误");

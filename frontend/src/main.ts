@@ -24,7 +24,6 @@ const routes = [
   { path: "/settings", component: Settings },
   { path: "/palette", component: Settings },
   { path: "/wishlist", component: WishList },
-  { path: "/rewards", component: WishList },
   { path: "/meet", component: Meet },
   { path: "/past", component: Meet },
   { path: "/story/full", component: StoryFull },

@@ -5,24 +5,25 @@ import { useDraft } from "../../lib/draft";
 import { useTask } from "../../lib/task";
 import { confirmCommand } from "../../lib/confirmCommand";
 import type { Wish } from "../../models";
-const props = defineProps<{ wish?: Wish; kind: "wish" | "reward" }>(),
+const props = defineProps<{ wish?: Wish }>(),
   emit = defineEmits<{ close: [] }>(),
   s = useSpace(),
   task = useTask();
-const collection = props.kind === "wish" ? "wishlist" : "rewards";
+/* 2026-11-05 愿望与奖励合并：只剩一份清单，落在 wishlist。
+   rewards 表冻结只读，老数据不会从这里被写入；那些项的编辑入口也已收起。 */
+const collection = "wishlist";
 const {
   draft: f,
   warning,
   clear,
 } = useDraft(
-  `women.v2.draft.${s.session!.account}.${props.kind}.${props.wish?.id || "new"}`,
+  `women.v2.draft.${s.session!.account}.wish.${props.wish?.id || "new"}`,
   {
     id: props.wish?.id || crypto.randomUUID(),
     name: props.wish?.name || "",
-    scope: props.wish?.scope || (props.kind === "wish" ? "both" : s.slot),
+    scope: props.wish?.scope || "both",
     executor: props.wish?.executor || "both",
     pointsLabel: props.wish?.pointsLabel || "待定",
-    tier: props.wish?.tier || "small",
     baseVersion: props.wish ? s.version(collection, props.wish.id) : undefined,
   },
 );
@@ -33,7 +34,7 @@ const canDelete = () =>
 function save() {
   task.run(async () => {
     await s.submit(
-      props.kind + ".save",
+      "wish.save",
       { ...f.value },
       "愿望：" + f.value.name,
       collection,
@@ -48,7 +49,7 @@ function remove() {
     if (
       await confirmCommand(
         s,
-        props.kind + ".delete",
+        "wish.delete",
         collection,
         f.value.id,
         "删除这项内容？已有兑换流水保留，不会自动退分；待确认申请需要先取消。",
@@ -63,9 +64,7 @@ function remove() {
 }
 </script>
 <template>
-  <Modal
-    :title="(wish ? '编辑' : '新增') + (kind === 'wish' ? '愿望' : '奖励')"
-    @close="emit('close')"
+  <Modal :title="(wish ? '编辑' : '新增') + '愿望'" @close="emit('close')"
     ><form @submit.prevent="save">
       <label class="field"
         ><span class="field-k">名称</span
@@ -84,26 +83,7 @@ function remove() {
           required
           placeholder="正整数，或填写待定"
       /></label>
-      <div v-if="kind === 'reward'" class="field">
-        <div class="field-k">档位</div>
-        <div class="chips" role="group" aria-label="奖励档位">
-          <button
-            v-for="t in [
-              { k: 'small', n: '小奖励' },
-              { k: 'mid', n: '中奖励' },
-              { k: 'big', n: '大奖励' },
-            ]"
-            :key="t.k"
-            type="button"
-            class="chip-cat"
-            :class="{ on: f.tier === t.k }"
-            @click="f.tier = t.k"
-          >
-            {{ t.n }}
-          </button>
-        </div>
-      </div>
-      <div v-if="kind === 'wish'" class="field">
+      <div class="field">
         <div class="field-k">属于谁</div>
         <div class="chips" role="group" aria-label="属于谁">
           <button
@@ -156,7 +136,7 @@ function remove() {
         class="btn-ghost danger-action"
         @click="remove"
       >
-        删除这项{{ kind === "wish" ? "愿望" : "奖励" }}
+        删除这项愿望
       </button>
       <div class="foot-line">随时可以改，已有兑换记录保留。</div>
     </form></Modal
