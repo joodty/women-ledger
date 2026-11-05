@@ -44,12 +44,16 @@ const cat = (e: Entry) =>
       </div>
       <div class="entry-main">
         <div class="entry-line1">
-          <span class="entry-time">{{ e.start }} – {{ e.end }}</span
+          <span class="entry-time">{{
+            e.minutes ? `${e.start} – ${e.end}` : e.start
+          }}</span
           ><span
             class="entry-chip"
             :style="{ background: rgba(cat(e).color), color: cat(e).color }"
             >{{ cat(e).name }}</span
-          ><span class="entry-dur">{{ duration(e.minutes) }}</span>
+          ><span class="entry-dur">{{
+            e.minutes ? duration(e.minutes) : "已做到"
+          }}</span>
         </div>
         <div class="entry-text">{{ e.content }}</div>
         <div class="entry-foot">

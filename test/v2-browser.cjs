@@ -85,9 +85,10 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect
       .poll(async () => (await snapshot(b)).data.goals[0].joined)
       .toBe(true);
-    await b.getByRole("button", { name: "记一次打卡" }).click();
-    await b.getByLabel("做了什么").fill("对方打卡");
-    await b.getByRole("button", { name: "保存记录" }).click();
+    /* 从约定上点一下就生成记录，不再弹表单；记录内容就是约定名 */
+    await b
+      .getByRole("button", { name: "记一次：共同运动", exact: true })
+      .click();
     await expect
       .poll(async () => (await snapshot(b)).data.entries.length)
       .toBe(1);
@@ -260,7 +261,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect(a.getByRole("dialog")).toHaveCount(0);
     await b.goto(base + "/#/");
     await b
-      .getByRole("button", { name: "修改记录：对方打卡", exact: true })
+      .getByRole("button", { name: "修改记录：共同运动", exact: true })
       .click();
     await b
       .getByRole("dialog", { name: "改一笔", exact: true })
@@ -279,7 +280,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
       .toBe(false);
     assert.equal((await snapshot(a)).data.goals[0].categoryId, "none");
     assert.equal(
-      (await snapshot(b)).data.entries.find((x) => x.content === "对方打卡")
+      (await snapshot(b)).data.entries.find((x) => x.content === "共同运动")
         .categoryId,
       "none",
     );
@@ -329,7 +330,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect.poll(() => a.url()).toBe(base + "/#/");
 
     const kept = (await snapshot(b)).data.entries.find(
-      (x) => x.content === "对方打卡",
+      (x) => x.content === "共同运动",
     );
     const awarded = (await snapshot(b)).data.points_ledger.filter(
       (x) => x.entryId === kept.id,
@@ -357,7 +358,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
     );
     await b.goto(base + "/#/");
     await b
-      .getByRole("button", { name: "修改记录：对方打卡", exact: true })
+      .getByRole("button", { name: "修改记录：共同运动", exact: true })
       .click();
     await b.getByRole("button", { name: "删除这条记录", exact: true }).click();
     await expect

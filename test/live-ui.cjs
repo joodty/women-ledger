@@ -276,7 +276,8 @@ function config() {
 
     step = "goal checkin and points";
     const goalName = run + "-个人约定",
-      checkinText = run + "-打卡";
+      /* 现在从约定上点一下就生成记录，记录内容就是约定名 */
+      checkinText = goalName;
     await refresh(a, "/goals");
     await a.getByRole("button", { name: /^新增约定/ }).click();
     const goalDialog = a.getByRole("dialog", { name: "新增约定", exact: true });
@@ -302,17 +303,11 @@ function config() {
     const goal = a
       .locator(".goal-card")
       .filter({ has: a.locator(".goal-name").filter({ hasText: goalName }) });
-    await goal.getByRole("button", { name: "记一次打卡", exact: true }).click();
-    const checkinDialog = a.getByRole("dialog", {
-      name: "记一笔",
-      exact: true,
-    });
-    await ui("checkin: fill content", () =>
-      checkinDialog.getByLabel("做了什么").fill(checkinText),
+    await ui("checkin: tap once", () =>
+      goal
+        .getByRole("button", { name: "记一次：" + goalName, exact: true })
+        .click(),
     );
-    await checkinDialog
-      .getByRole("button", { name: "保存记录", exact: true })
-      .click();
     await waitRecord(a, checkinText);
     const checked = await snapshot(a),
       entry = checked.data.entries.find((x) => x.content === checkinText);
@@ -331,7 +326,7 @@ function config() {
       path: path.join(output, "goal-checkin-progress.png"),
       fullPage: true,
     });
-    recordCheck("通过约定入口打卡，进度变化，服务端发放设置的三分");
+    recordCheck("从约定上点一下就地生成记录，进度变化，服务端发放设置的三分");
 
     step = "insufficient reward points";
     await refresh(a, "/points");

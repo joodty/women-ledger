@@ -8,7 +8,8 @@ const p = defineProps<{
 const points = computed(() =>
   p.series.map((v, i) => ({
     ...v,
-    x: 22 + (i * 290) / Math.max(1, p.series.length - 1),
+    /* 右边界留出半个标签的宽度，否则最后一天的「11/5」会被 viewBox 裁掉 */
+    x: 22 + (i * 282) / Math.max(1, p.series.length - 1),
     y: v.value == null ? null : 14 + 90 - ((v.value - 1) * 90) / 4,
   })),
 );
@@ -35,7 +36,7 @@ const areas = computed(() => {
     class="mood-chart"
     viewBox="0 0 320 128"
     role="img"
-    aria-label="近七天快乐值折线，点击日期查看那天"
+    aria-label="近七天快乐值折线，点击某一天看那天记了什么"
   >
     <path
       v-for="(area, i) in areas"
@@ -47,7 +48,7 @@ const areas = computed(() => {
     <g v-for="n in 5" :key="n">
       <line
         x1="22"
-        x2="312"
+        x2="304"
         :y1="104 - (n - 1) * 22.5"
         :y2="104 - (n - 1) * 22.5"
         stroke="var(--line)"
@@ -85,8 +86,8 @@ const areas = computed(() => {
           :cx="point.x"
           :cy="point.y"
           :r="selected === point.date ? 5 : 3.5"
-          fill="white"
-          stroke="var(--pink)"
+          fill="var(--pink)"
+          :stroke="selected === point.date ? 'var(--card)' : 'none'"
           stroke-width="1.5"
         />
         <text

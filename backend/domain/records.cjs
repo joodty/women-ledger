@@ -38,7 +38,13 @@ module.exports = function ({
       );
       const mins = (s) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3));
       const minutes = (mins(end) - mins(start) + 1440) % 1440;
-      fail(minutes > 0, "validation", "开始和结束时间不能相同");
+      /* 从约定上点「记一次」只回答「今天做了没有」，不填时间，所以允许 0 分钟；
+         手写的记录仍然必须有真实时长，否则时间分布会被一堆 0 分钟灌满 */
+      fail(
+        minutes > 0 || (minutes === 0 && p.goalId),
+        "validation",
+        "开始和结束时间不能相同",
+      );
       const g = p.goalId ? data.goals.find((g) => g.id === p.goalId) : null;
       if (p.goalId)
         fail(

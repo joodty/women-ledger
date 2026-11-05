@@ -145,7 +145,7 @@ function remove() {
           }}</span>
         </div>
         <div class="chip-hint">
-          点约定上的「记一次打卡」，或记一笔时选中它，都会计入本周进度。
+          点约定上的「记一次」，或记一笔时选中它，都会计入本周进度。
         </div>
       </div>
       <div class="field">

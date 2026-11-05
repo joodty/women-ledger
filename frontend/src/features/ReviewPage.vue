@@ -16,10 +16,25 @@ const s = useSpace(),
   selected = ref(today()),
   scope = ref<Slot | "all">("all"),
   editing = ref<Entry>();
-const selectDay = (date: string) => {
-  selected.value = date;
-  month.value = date.slice(0, 7);
-};
+/* 折线图单独记一个选中日：点它不再拽着上面的月历和并排跑，
+   否则在页底点一下，变化全在屏幕外，等于没反馈。 */
+const picked = ref(""),
+  pick = (date: string) => {
+    picked.value = picked.value === date ? "" : date;
+  };
+const pickedRows = computed(() =>
+  picked.value
+    ? s.data.entries
+        .filter(
+          (e) =>
+            e.date === picked.value &&
+            e.happy &&
+            e.memberId === (scope.value === s.other ? s.other : s.slot),
+        )
+        .slice()
+        .sort((a, b) => a.start.localeCompare(b.start))
+    : [],
+);
 const dayRows = (slot: Slot) =>
   s.data.entries
     .filter((e) => e.date === selected.value && e.memberId === slot)
@@ -160,9 +175,27 @@ const selfTime = computed(() =>
       <MoodChart
         v-if="series.some((p) => p.value !== null)"
         :series="series"
-        :selected="selected"
-        @select="selectDay"
+        :selected="picked"
+        @select="pick"
       />
+      <div v-if="picked" class="mood-detail">
+        <div class="md-head">
+          <span>{{ monthDay(picked) }} {{ weekday(picked) }}</span
+          ><span v-if="pickedRows.length" class="sub"
+            >{{ pickedRows.length }} 条</span
+          >
+        </div>
+        <div v-for="e in pickedRows" :key="e.id" class="md-row">
+          <div class="md-line">
+            <span class="md-name">{{ e.content }}</span
+            ><span class="md-score">{{ e.happy }} 分</span>
+          </div>
+          <div v-if="e.note" class="md-note">{{ e.note }}</div>
+        </div>
+        <div v-if="!pickedRows.length" class="empty" style="padding: 8px 0 2px">
+          这天没有带快乐值的记录。
+        </div>
+      </div>
       <div v-else class="empty">
         近 7 天还没有快乐值记录。<br />记一笔的时候可以顺手打一个分。
       </div>

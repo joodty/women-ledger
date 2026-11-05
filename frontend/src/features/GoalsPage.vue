@@ -5,7 +5,7 @@ import { useTask } from "../lib/task";
 import PageHead from "../components/PageHead.vue";
 import Icon from "../components/Icon.vue";
 import GoalEditor from "./goals/GoalEditor.vue";
-import RecordEditor from "./records/RecordEditor.vue";
+import { useGoalCheckin } from "../lib/checkin";
 import { confirmCommand } from "../lib/confirmCommand";
 import type { Goal } from "../models";
 const s = useSpace(),
@@ -13,7 +13,7 @@ const s = useSpace(),
   editor = ref(false),
   editing = ref<Goal>(),
   shared = ref(false),
-  checkin = ref(""),
+  { log: logGoal } = useGoalCheckin(),
   openAction = ref(""),
   archived = ref(false);
 const visible = computed(() =>
@@ -177,9 +177,23 @@ function remove(g: Goal) {
               ><button
                 v-if="g.joined !== false && !archived"
                 class="btn-mini"
-                @click="checkin = g.id"
+                :disabled="s.reached(g)"
+                :aria-label="
+                  (s.reached(g)
+                    ? '已完成：'
+                    : g.kind === 'once'
+                      ? '完成：'
+                      : '记一次：') + g.name
+                "
+                @click="logGoal(g)"
               >
-                记一次打卡
+                {{
+                  s.reached(g)
+                    ? "已做到"
+                    : g.kind === "once"
+                      ? "完成"
+                      : "记一次"
+                }}
               </button></span
             >
           </div>
@@ -211,7 +225,7 @@ function remove(g: Goal) {
         :goal="editing"
         :shared="shared"
         @close="editor = false"
-      /><RecordEditor v-if="checkin" :goal-id="checkin" @close="checkin = ''" />
+      />
     </div>
   </div>
 </template>

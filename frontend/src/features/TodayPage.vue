@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useSpace } from "../stores/space";
+import { useGoalCheckin } from "../lib/checkin";
 import type { Entry, Goal, Slot } from "../models";
 import Icon from "../components/Icon.vue";
 import MemberAvatar from "../components/MemberAvatar.vue";
@@ -12,6 +13,7 @@ import TidySheet from "./records/TidySheet.vue";
 import { today, duration } from "../lib/date";
 import { monthDay, weekday } from "../lib/presentation";
 const s = useSpace(),
+  { justLogged, log: logOne, undo: undoOne } = useGoalCheckin(),
   side = ref<Slot>(s.slot),
   editor = ref(false),
   editing = ref<Entry>(),
@@ -44,6 +46,7 @@ const unclassified = computed(() =>
   rows.value.filter((e) => !e.categoryId || e.categoryId === "none"),
 );
 const other = computed(() => (side.value === s.slot ? s.other : s.slot));
+
 function switchSide() {
   side.value = other.value;
 }
@@ -80,29 +83,45 @@ function edit(e: Entry) {
           >管理<Icon name="right" :size="12"
         /></RouterLink>
       </div>
-      <RouterLink
+      <div
         v-for="g in shownGoals"
         :key="g.id"
         class="prog-row"
         :class="{ 'goal-done': reached(g) }"
-        to="/goals"
-        ><span class="prog-main"
-          ><span class="prog-name">{{ g.name }}</span></span
+      >
+        <span class="prog-main"
+          ><span class="prog-name">{{ g.name }}</span
+          ><span v-if="justLogged[g.id]" class="goal-just"
+            >刚刚记了一次 ·
+            <button class="goal-undo" @click="undoOne(g)">撤销</button></span
+          ></span
         ><span v-if="g.scope === 'both'" class="task-who">我们的</span
-        ><span
-          class="goal-p"
-          :class="{ ok: reached(g) }"
-          >{{
-            g.joined === false
-              ? "等待加入"
-              : g.kind === "once"
-                ? s.progress(g)
-                  ? "已完成"
-                  : "一次就完"
-                : `本周 ${s.progress(g)}/${g.timesPerWeek || 1}`
-          }}</span
-        ></RouterLink
-      ><RouterLink v-if="restGoals" class="goal-fold" to="/goals"
+        ><span class="goal-p" :class="{ ok: reached(g) }">{{
+          g.joined === false
+            ? "等待加入"
+            : g.kind === "once"
+              ? s.progress(g)
+                ? "已完成"
+                : "一次就完"
+              : `本周 ${s.progress(g)}/${g.timesPerWeek || 1}`
+        }}</span
+        ><button
+          v-if="reached(g) && g.joined !== false"
+          class="goal-do done"
+          disabled
+          :aria-label="'已完成：' + g.name"
+        >
+          已做到</button
+        ><button
+          v-else-if="g.joined !== false"
+          class="goal-do"
+          :aria-label="(g.kind === 'once' ? '完成：' : '记一次：') + g.name"
+          @click="logOne(g)"
+        >
+          {{ g.kind === "once" ? "完成" : "记一次" }}
+        </button>
+      </div>
+      <RouterLink v-if="restGoals" class="goal-fold" to="/goals"
         >还有 {{ restGoals }} 个约定 ›</RouterLink
       ><button
         v-if="!goals.length"

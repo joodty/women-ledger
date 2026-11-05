@@ -110,6 +110,38 @@ const command = (type, payload, expectedVersion) => ({
       date: "2026-11-02",
       visibility,
     });
+    /* 约定上的「记一次」不填时长：带 goalId 的 0 分钟放行，不带的仍然拒绝 */
+    const zeroMinute = (id, goalId) => ({
+      id,
+      content: "zero minute",
+      start: "10:00",
+      end: "10:00",
+      date: "2026-11-02",
+      visibility: "shared",
+      ...(goalId ? { goalId } : {}),
+    });
+    assert.equal(
+      (
+        await req(
+          "/api/v2/commands",
+          command("record.create", zeroMinute("zero-goal-entry", "one")),
+          a.cookie,
+        )
+      ).status,
+      200,
+      "a goal checkin may carry zero minutes",
+    );
+    assert.equal(
+      (
+        await req(
+          "/api/v2/commands",
+          command("record.create", zeroMinute("zero-plain-entry")),
+          a.cookie,
+        )
+      ).status,
+      400,
+      "a hand written record still needs a real duration",
+    );
     const create = command(
       "record.create",
       entry("entry-a", "Alice record", "private"),
