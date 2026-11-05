@@ -459,11 +459,6 @@ svg {
   gap: 8px;
   margin-top: 8px;
 }
-.entry-foot .entry-bar {
-  flex: 1;
-  min-width: 0;
-  margin-top: 0;
-}
 .entry-chip {
   font-size: 11px;
   padding: 1.5px 8px;
@@ -477,18 +472,6 @@ svg {
   font-size: 14.5px;
   color: var(--ink);
   letter-spacing: 0.2px;
-}
-.entry-bar {
-  margin-top: 8px;
-  height: 5px;
-  border-radius: 3px;
-  background: #f3efea;
-  overflow: hidden;
-}
-.entry-bar i {
-  display: block;
-  height: 100%;
-  border-radius: 3px;
 }
 .entry-arrow {
   display: flex;

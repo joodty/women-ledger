@@ -1,18 +1,16 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import { useSpace } from "../stores/space";
 import type { Entry } from "../models";
 import Icon from "./Icon.vue";
 import { catIcon, rgba } from "../lib/presentation";
 import { duration } from "../lib/date";
-const props = defineProps<{
+defineProps<{
   entries: Entry[];
   editable?: boolean;
   showScore?: boolean;
 }>();
 const emit = defineEmits<{ edit: [entry: Entry] }>();
-const s = useSpace(),
-  total = computed(() => props.entries.reduce((n, e) => n + e.minutes, 0));
+const s = useSpace();
 const cat = (e: Entry) =>
   s.data.categories.find((c) => c.id === (e.categoryId || "none")) || {
     name: "未分类",
@@ -56,18 +54,8 @@ const cat = (e: Entry) =>
           }}</span>
         </div>
         <div class="entry-text">{{ e.content }}</div>
-        <div class="entry-foot">
-          <div class="entry-bar">
-            <i
-              :style="{
-                width: Math.min(100, (e.minutes / (total || 1)) * 100) + '%',
-                background: cat(e).color,
-              }"
-            ></i>
-          </div>
-          <span v-if="showScore && e.happy" class="entry-score"
-            >{{ e.happy }} 分</span
-          >
+        <div v-if="showScore && e.happy" class="entry-foot">
+          <span class="entry-score">{{ e.happy }} 分</span>
         </div>
       </div>
       <div v-if="editable" class="entry-arrow">
