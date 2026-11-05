@@ -86,13 +86,15 @@ const server = spawn(process.execPath, ["server.cjs"], {
       .poll(async () => (await snapshot(b)).data.goals[0].joined)
       .toBe(true);
     await b.getByRole("button", { name: "记一次打卡" }).click();
-    await b.getByLabel("做了什么").fill("对方私密打卡");
-    await b.getByLabel("可见范围").selectOption("private");
+    await b.getByLabel("做了什么").fill("对方打卡");
     await b.getByRole("button", { name: "保存记录" }).click();
     await expect
       .poll(async () => (await snapshot(b)).data.entries.length)
       .toBe(1);
-    assert.equal((await snapshot(a)).data.entries.length, 0);
+    /* 记一笔不再有「谁可以看到」，新记录一律双方可见 */
+    await expect
+      .poll(async () => (await snapshot(a)).data.entries.length)
+      .toBe(1);
     await a.goto(base + "/#/story");
     await a.locator("#story-input").fill("草稿不会因为切换页面丢失");
     await a.getByRole("link", { name: "今天", exact: true }).click();
@@ -258,7 +260,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect(a.getByRole("dialog")).toHaveCount(0);
     await b.goto(base + "/#/");
     await b
-      .getByRole("button", { name: "修改记录：对方私密打卡", exact: true })
+      .getByRole("button", { name: "修改记录：对方打卡", exact: true })
       .click();
     await b
       .getByRole("dialog", { name: "改一笔", exact: true })
@@ -277,7 +279,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
       .toBe(false);
     assert.equal((await snapshot(a)).data.goals[0].categoryId, "none");
     assert.equal(
-      (await snapshot(b)).data.entries.find((x) => x.content === "对方私密打卡")
+      (await snapshot(b)).data.entries.find((x) => x.content === "对方打卡")
         .categoryId,
       "none",
     );
@@ -322,7 +324,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
       .toBe(0);
 
     const kept = (await snapshot(b)).data.entries.find(
-      (x) => x.content === "对方私密打卡",
+      (x) => x.content === "对方打卡",
     );
     const awarded = (await snapshot(b)).data.points_ledger.filter(
       (x) => x.entryId === kept.id,
@@ -350,7 +352,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
     );
     await b.goto(base + "/#/");
     await b
-      .getByRole("button", { name: "修改记录：对方私密打卡", exact: true })
+      .getByRole("button", { name: "修改记录：对方打卡", exact: true })
       .click();
     await b.getByRole("button", { name: "删除这条记录", exact: true }).click();
     await expect

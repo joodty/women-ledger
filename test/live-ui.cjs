@@ -228,7 +228,7 @@ function config() {
       }
     }
     recordCheck("仅通过本人页面删除此前自动生成的 QA 约定，保留其他内容");
-    async function prepareRecord(page, text, visibility = "shared") {
+    async function prepareRecord(page, text) {
       const label = "record " + (pages.indexOf(page) === 0 ? "A" : "B") + ": ";
       await refresh(page);
       await ui(label + "select own space", () =>
@@ -240,9 +240,6 @@ function config() {
       const dialog = page.getByRole("dialog", { name: "记一笔", exact: true });
       await ui(label + "fill content", () =>
         dialog.getByLabel("做了什么").fill(text),
-      );
-      await ui(label + "select visibility", () =>
-        dialog.getByLabel("可见范围").selectOption(visibility),
       );
       await ui(label + "select no goal", () =>
         dialog.getByLabel("计入哪个约定").selectOption(""),
@@ -259,27 +256,23 @@ function config() {
         .toBe(true);
       await expect(page.getByRole("dialog")).toHaveCount(0);
     }
-    step = "private and shared records";
-    const privateText = run + "-A私密记录",
-      sharedText = run + "-A分享记录";
-    await (await prepareRecord(a, privateText, "private")).click();
-    await waitRecord(a, privateText);
-    await expect(a.getByText(privateText, { exact: true })).toBeVisible();
-    check(
-      !(await snapshot(b)).data.entries.some((x) => x.content === privateText),
-      "Private record leaked to partner",
-    );
-    await (await prepareRecord(a, sharedText)).click();
-    await waitRecord(a, sharedText);
+    step = "records are visible to both";
+    const firstText = run + "-A记录一",
+      secondText = run + "-A记录二";
+    await (await prepareRecord(a, firstText)).click();
+    await waitRecord(a, firstText);
+    await expect(a.getByText(firstText, { exact: true })).toBeVisible();
+    await (await prepareRecord(a, secondText)).click();
+    await waitRecord(a, secondText);
     await refresh(b);
     await b.locator(".pair-tabs .pair-tab").nth(1).click();
-    await expect(b.getByText(sharedText, { exact: true })).toBeVisible();
-    await expect(b.getByText(privateText, { exact: true })).toHaveCount(0);
+    await expect(b.getByText(firstText, { exact: true })).toBeVisible();
+    await expect(b.getByText(secondText, { exact: true })).toBeVisible();
     await b.screenshot({
       path: path.join(output, "partner-visible-records.png"),
       fullPage: true,
     });
-    recordCheck("真实表单新增私密及共享记录，对方页面只显示共享内容");
+    recordCheck("记一笔不再有可见性选择，新增的记录对方页面都能看到");
 
     step = "goal checkin and points";
     const goalName = run + "-个人约定",
@@ -302,9 +295,6 @@ function config() {
         .getByRole("button", { name: "只算我自己的", exact: true })
         .click(),
     );
-    await ui("goal: select privacy", () =>
-      goalDialog.getByLabel("可见范围").selectOption("private"),
-    );
     await goalDialog
       .getByRole("button", { name: "保存约定", exact: true })
       .click();
@@ -320,9 +310,6 @@ function config() {
     await ui("checkin: fill content", () =>
       checkinDialog.getByLabel("做了什么").fill(checkinText),
     );
-    await ui("checkin: select privacy", () =>
-      checkinDialog.getByLabel("可见范围").selectOption("private"),
-    );
     await checkinDialog
       .getByRole("button", { name: "保存记录", exact: true })
       .click();
@@ -336,8 +323,8 @@ function config() {
       "Checkin did not earn the configured three points",
     );
     check(
-      !(await snapshot(b)).data.entries.some((x) => x.content === checkinText),
-      "Private checkin leaked to partner",
+      (await snapshot(b)).data.entries.some((x) => x.content === checkinText),
+      "Shared checkin was not visible to partner",
     );
     await expect(goal.locator(".goal-stat .txt")).toHaveText("1/3");
     await a.screenshot({
@@ -609,7 +596,7 @@ function config() {
         (await snapshot(a)).data.rewards.some((w) => w.name === rewardName),
       )
       .toBe(false);
-    for (const text of [privateText, sharedText, textA, categorizedText])
+    for (const text of [firstText, secondText, textA, categorizedText])
       await deleteCurrentRecord(a, text);
     await deleteCurrentRecord(b, textB);
     const beforeGoalDelete = await snapshot(a),

@@ -350,11 +350,6 @@ p {
   align-items: center;
   gap: 8px;
 }
-.entry-private {
-  font-size: 10px;
-  color: var(--ink-3);
-  margin-top: 3px;
-}
 .entry {
   width: 100%;
 }
@@ -576,9 +571,6 @@ button:disabled {
 }
 .review-col .entry-time {
   white-space: nowrap;
-}
-.review-col .entry-private {
-  display: none;
 }
 .stat-card {
   text-align: left;
@@ -903,4 +895,61 @@ button:disabled {
 .wish-btn {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+
+/* 一起页 · 各自做到的（折叠，默认收起） */
+.done-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  text-align: left;
+}
+.done-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+.done-sum {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.done-head svg {
+  margin-left: auto;
+  color: var(--ink-4);
+  transition: transform 0.16s;
+}
+.done-head.open svg {
+  transform: rotate(180deg);
+}
+.done-body {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+.done-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.done-main {
+  min-width: 0;
+}
+.done-who {
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.3;
+}
+.done-list {
+  font-size: 12.5px;
+  color: var(--ink);
+  line-height: 1.5;
+  margin-top: 1px;
+  word-break: break-word;
 }

@@ -64,8 +64,7 @@ function goalFields(p) {
     pointsPerCheckin: points,
     timesPerWeek: kind === "once" ? 1 : times,
     scope,
-    visibility:
-      scope === "both" ? "shared" : visibility(p.visibility || "private"),
+    visibility: visibility(p.visibility || "shared"),
     categoryId: p.categoryId || "growth",
     keywords: [],
     reminderTime: p.reminderTime || "",

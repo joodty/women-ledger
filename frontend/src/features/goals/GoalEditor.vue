@@ -22,7 +22,7 @@ const {
     name: props.goal?.name || "",
     kind: props.goal?.kind || "repeat",
     scope: props.goal?.scope || (props.shared ? "both" : "me"),
-    visibility: props.goal?.visibility || "private",
+    visibility: props.goal?.visibility || "shared",
     timesPerWeek: props.goal?.timesPerWeek || 3,
     pointsPerCheckin: props.goal?.pointsPerCheckin || 3,
     reminderTime: props.goal?.reminderTime || "",
@@ -193,13 +193,6 @@ function remove() {
           共同的约定要两个人都点头：一人发起，另一人加入。
         </div>
       </div>
-      <label v-if="f.scope !== 'both'" class="field"
-        ><span class="field-k">谁可以看到</span
-        ><select v-model="f.visibility" aria-label="可见范围" class="input-box">
-          <option value="private">仅自己</option>
-          <option value="shared">双方可见</option>
-        </select></label
-      >
       <label class="field"
         ><span class="field-k">每天提醒（选填）</span
         ><input

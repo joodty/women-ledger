@@ -174,18 +174,6 @@ function remove() {
           </option>
         </select></label
       >
-      <label class="field"
-        ><span class="field-k">谁可以看到</span
-        ><select
-          id="f-visibility"
-          v-model="f.visibility"
-          aria-label="可见范围"
-          class="input-box"
-        >
-          <option value="private">仅自己</option>
-          <option value="shared">双方可见</option>
-        </select></label
-      >
       <div class="field">
         <div class="field-k">今天的快乐值<i>选填</i></div>
         <div class="happy-row" role="group" aria-label="快乐值">

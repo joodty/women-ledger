@@ -52,9 +52,6 @@ const cat = (e: Entry) =>
           ><span class="entry-dur">{{ duration(e.minutes) }}</span>
         </div>
         <div class="entry-text">{{ e.content }}</div>
-        <div v-if="e.visibility === 'private'" class="entry-private">
-          仅自己可见
-        </div>
         <div class="entry-foot">
           <div class="entry-bar">
             <i

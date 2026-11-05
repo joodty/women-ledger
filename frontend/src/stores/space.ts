@@ -234,14 +234,20 @@ export const useSpace = defineStore("space", () => {
         .reduce((n, r) => n + (id === "me" ? r.fromMe || 0 : r.fromHim || 0), 0)
     );
   }
-  function progress(g: Goal) {
+  /* 谁的进度：看自己用 progress()，看对方用 progressOf()。
+     两个人的进度必须分开数，否则「各自做到的」会把对方算进自己身上。 */
+  function progressOf(g: Goal, memberId: Slot) {
     return data.value.entries.filter(
       (e) =>
-        e.memberId === slot.value &&
+        e.memberId === memberId &&
         e.goalId === g.id &&
         (g.kind === "once" || (e.date >= weekStart() && e.date <= today())),
     ).length;
   }
+  const progress = (g: Goal) => progressOf(g, slot.value);
+  /* 这条约定本周到到量了吗：一次就完看有没有做过一次，每周要做看本周次数够不够 */
+  const reached = (g: Goal, memberId: Slot = slot.value) =>
+    progressOf(g, memberId) >= (g.kind === "once" ? 1 : g.timesPerWeek || 1);
   async function redeem(kind: "wish" | "reward", id: string) {
     if (pending.value.length) throw Error("请先提交本机修改");
     const k = `women.v2.redeem.${session.value!.account}.${kind}.${id}`;
@@ -337,6 +343,8 @@ export const useSpace = defineStore("space", () => {
     member,
     balance,
     progress,
+    progressOf,
+    reached,
     redeem,
     version,
     restoreLegacy,
