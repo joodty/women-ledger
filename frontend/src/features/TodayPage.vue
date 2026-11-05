@@ -75,7 +75,6 @@ function edit(e: Entry) {
     </div>
     <div class="page-head">
       <h1 class="page-title">今天，过得怎么样？</h1>
-      <p class="page-sub">记一两行就好。</p>
     </div>
     <section v-if="side === s.slot" class="card">
       <div class="card-title">
