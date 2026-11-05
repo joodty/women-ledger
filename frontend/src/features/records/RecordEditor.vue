@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import Modal from "../../components/Modal.vue";
 import { useSpace } from "../../stores/space";
 import { useDraft } from "../../lib/draft";
@@ -11,6 +11,8 @@ const props = defineProps<{ entry?: Entry; goalId?: string }>(),
   emit = defineEmits<{ close: [] }>(),
   s = useSpace(),
   task = useTask();
+/* 新建时折叠，改已有记录时默认展开——点进去就是要改，已经填过的东西得看得见 */
+const more = ref(!!props.entry);
 const previous = s.data.entries
   .filter((e) => e.memberId === s.slot && e.date === today())
   .slice()
@@ -131,12 +133,20 @@ function remove() {
           class="textarea"
           maxlength="10000"
           required
-          placeholder="写具体一点，比如“刷招聘网站”而不是“找工作”"
         ></textarea>
         <div class="textarea-foot">
           <span class="count-badge">{{ f.content.length }}/10000</span>
         </div>
       </div>
+      <button
+        type="button"
+        class="more-toggle"
+        :aria-expanded="more"
+        @click="more = !more"
+      >
+        {{ more ? "－ 更多" : "＋ 更多" }}
+      </button>
+      <template v-if="more">
       <div class="field">
         <div class="field-k">分类<i>选填</i></div>
         <div class="chips">
@@ -199,6 +209,7 @@ function remove() {
           maxlength="10000"
           placeholder="身体、心情，或者别的事…"
       /></label>
+      </template>
       <p class="v2-error" role="alert">{{ warning || task.error.value }}</p>
       <button class="btn-primary" :disabled="task.busy.value">
         {{ entry ? "保存修改" : "保存记录" }}</button
