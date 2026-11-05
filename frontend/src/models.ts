@@ -52,7 +52,6 @@ export interface Wish {
   status?: string;
   icon?: string;
   cat?: string;
-  tier?: string;
 }
 export interface Story {
   id: string;
@@ -102,7 +101,6 @@ export interface SpaceData {
   entries: Entry[];
   goals: Goal[];
   wishlist: Wish[];
-  rewards: Wish[];
   story_entries: Story[];
   milestones: Milestone[];
   points_ledger: Points[];

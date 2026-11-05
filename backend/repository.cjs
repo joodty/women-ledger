@@ -7,7 +7,6 @@ const collections = [
   "goals",
   "weekly_settlements",
   "points_ledger",
-  "rewards",
   "wishlist",
   "story_entries",
   "milestones",
@@ -149,6 +148,56 @@ if (!db.prepare("SELECT 1 FROM schema_migrations WHERE version=2").get()) {
       .all())
       project(s.space_id, JSON.parse(s.json), s.revision);
     db.prepare("INSERT INTO schema_migrations VALUES(2,?)").run(
+      new Date().toISOString(),
+    );
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+/* v3：奖励已并进愿望，rewards 这套数据彻底不要了。
+   投影表里的行删掉，两处 state json 里的键也摘掉，
+   否则老库会带着一个没人再读的键一直漂在那儿。 */
+if (!db.prepare("SELECT 1 FROM schema_migrations WHERE version=3").get()) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("DELETE FROM entity_rows WHERE collection='rewards'").run();
+    const strip = (table, key) => {
+      for (const r of db.prepare(`SELECT ${key} AS k,json FROM ${table}`).all()) {
+        let data;
+        try {
+          data = JSON.parse(r.json);
+        } catch {
+          continue;
+        }
+        if (!data || !Object.hasOwn(data, "rewards")) continue;
+        delete data.rewards;
+        db.prepare(`UPDATE ${table} SET json=? WHERE ${key}=?`).run(
+          JSON.stringify(data),
+          r.k,
+        );
+      }
+    };
+    strip("state", "id");
+    strip("space_state", "space_id");
+    /* rewards 已不在 collections 里，投影时会落进 meta.value，
+       这里一并摘掉，否则 load 又把它带回来 */
+    for (const m of db.prepare("SELECT space_id,json FROM entity_meta").all()) {
+      let meta;
+      try {
+        meta = JSON.parse(m.json);
+      } catch {
+        continue;
+      }
+      if (!meta?.value || !Object.hasOwn(meta.value, "rewards")) continue;
+      delete meta.value.rewards;
+      db.prepare("UPDATE entity_meta SET json=? WHERE space_id=?").run(
+        JSON.stringify(meta),
+        m.space_id,
+      );
+    }
+    db.prepare("INSERT INTO schema_migrations VALUES(3,?)").run(
       new Date().toISOString(),
     );
     db.exec("COMMIT");

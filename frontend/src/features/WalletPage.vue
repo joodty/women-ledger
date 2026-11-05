@@ -5,14 +5,12 @@ import { useTask } from "../lib/task";
 import { post } from "../lib/api";
 import { confirmCommand } from "../lib/confirmCommand";
 import { monthDay } from "../lib/presentation";
-import { useWishes } from "../lib/wishes";
-import type { WishItem } from "../lib/wishes";
 import PageHead from "../components/PageHead.vue";
 import Icon from "../components/Icon.vue";
 import type { Wish, Redemption } from "../models";
 const s = useSpace(),
-  task = useTask(),
-  { all, kindOf, isDone } = useWishes();
+  task = useTask();
+const isDone = (w: Wish) => ["done", "redeemed"].includes(w.status || "");
 const each = (w: Wish) => (w.scope || "both") === "both";
 function gap(w: Wish) {
   const cost = Number(w.pointsLabel);
@@ -27,9 +25,12 @@ function gap(w: Wish) {
     : Math.max(0, cost - s.balance(s.slot));
 }
 const wishes = computed(() =>
-  all.value.filter((w) => !isDone(w)).slice().sort((a, b) => gap(a) - gap(b)),
+  s.data.wishlist
+    .filter((w) => !isDone(w))
+    .slice()
+    .sort((a, b) => gap(a) - gap(b)),
 );
-const byId = (id?: string) => all.value.find((w) => w.id === id);
+const byId = (id?: string) => s.data.wishlist.find((w) => w.id === id);
 const pending = computed(() =>
   s.data.redemptions.filter((r) => r.status === "pending"),
 );
@@ -43,7 +44,7 @@ const history = computed(() =>
     .slice()
     .reverse(),
 );
-function redeem(w: WishItem) {
+function redeem(w: Wish) {
   if (
     confirm(
       (w.scope || "both") === "both"
@@ -52,7 +53,7 @@ function redeem(w: WishItem) {
     )
   )
     task.run(async () => {
-      await s.redeem(kindOf(w), w.id);
+      await s.redeem(w.id);
       s.notice = "兑换请求已处理";
     });
 }

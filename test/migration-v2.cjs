@@ -59,8 +59,9 @@ const original = {
       date: "2026-11-01",
     },
   ],
-  rewards: [],
   wishlist: [],
+  /* 升级前的库里还有 rewards，v3 迁移应该把它从 json 里抹掉 */
+  rewards: [{ id: "rw1", name: "old reward", pointsLabel: "4" }],
   story_entries: [
     {
       id: "s1",
@@ -73,7 +74,9 @@ const original = {
   milestones: [],
   sparks: ["keep"],
 };
-const json = JSON.stringify(original);
+const json = JSON.stringify(original),
+  expected = structuredClone(original),
+  expectedJson = (delete expected.rewards, JSON.stringify(expected));
 db.prepare("INSERT INTO state VALUES(1,23,?,?)").run(json, "2026-11-01");
 db.close();
 let child;
@@ -103,12 +106,12 @@ async function run(entry) {
   });
   assert.equal(response.status, 200);
   const result = await response.json();
-  assert.deepEqual(result.data, original);
+  assert.deepEqual(result.data, expected);
   assert.equal(result.revision, 23);
   const check = new DatabaseSync(file, { readOnly: true });
   assert.equal(
     check.prepare("SELECT json FROM state WHERE id=1").get().json,
-    json,
+    expectedJson,
   );
   assert.equal(
     check

@@ -19,7 +19,6 @@ const empty: SpaceData = {
   entries: [],
   goals: [],
   wishlist: [],
-  rewards: [],
   story_entries: [],
   milestones: [],
   points_ledger: [],
@@ -248,13 +247,13 @@ export const useSpace = defineStore("space", () => {
   /* 这条约定本周到到量了吗：一次就完看有没有做过一次，每周要做看本周次数够不够 */
   const reached = (g: Goal, memberId: Slot = slot.value) =>
     progressOf(g, memberId) >= (g.kind === "once" ? 1 : g.timesPerWeek || 1);
-  async function redeem(kind: "wish" | "reward", id: string) {
+  async function redeem(id: string) {
     if (pending.value.length) throw Error("请先提交本机修改");
-    const k = `women.v2.redeem.${session.value!.account}.${kind}.${id}`;
+    const k = `women.v2.redeem.${session.value!.account}.wish.${id}`;
     const requestId = localStorage.getItem(k) || crypto.randomUUID();
     localStorage.setItem(k, requestId);
     try {
-      await post("/api/redeem", { kind, id, requestId });
+      await post("/api/redeem", { kind: "wish", id, requestId });
       localStorage.removeItem(k);
       await refresh();
     } catch (e) {
@@ -300,7 +299,7 @@ export const useSpace = defineStore("space", () => {
       for (const x of list) x.memberId = swap(x.memberId) as Slot;
     for (const w of d.wishlist)
       if (w.scope) w.scope = swap(w.scope) as Slot | "both";
-    for (const w of [...d.wishlist, ...d.rewards])
+    for (const w of d.wishlist)
       if (w.executor) w.executor = swap(w.executor) as Slot | "both";
     for (const r of d.redemptions)
       [r.fromMe, r.fromHim] = [r.fromHim, r.fromMe];

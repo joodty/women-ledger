@@ -77,6 +77,8 @@ module.exports = async function (req, res, pathname, s) {
               .prepare("SELECT revision,json FROM space_state WHERE space_id=?")
               .get(space),
         current = row ? row.revision : 0;
+      /* 奖励已经整块删掉了：老客户端还会把 rewards 带上，收下但直接丢掉，不入库 */
+      delete body.data.rewards;
       let data = body.data,
         merged = false;
       const fullCurrent = row ? JSON.parse(row.json) : null;

@@ -18,7 +18,7 @@ module.exports = async function (req, res, pathname, s) {
   if (pathname === "/api/redeem" && req.method === "POST") {
     const body = await getBody(req);
     if (
-      !["wish", "reward"].includes(body.kind) ||
+      body.kind !== "wish" ||
       typeof body.id !== "string" ||
       !/^[a-z0-9_-]{1,100}$/i.test(body.id) ||
       typeof body.requestId !== "string" ||
@@ -47,10 +47,7 @@ module.exports = async function (req, res, pathname, s) {
           old.confirmRequestId === body.requestId
             ? old.confirmedBy
             : old.memberId;
-        if (
-          actor !== s.slot ||
-          (body.kind === "wish" ? old.wishId : old.rewardId) !== body.id
-        )
+        if (actor !== s.slot || old.wishId !== body.id)
           return send(res, 409, { error: "兑换请求编号冲突" });
         if (old.status === "cancelled")
           return send(res, 409, { error: "这次申请已取消，请重新发起" });
@@ -60,14 +57,8 @@ module.exports = async function (req, res, pathname, s) {
           pending: old.status === "pending",
         });
       }
-      const item = (body.kind === "wish" ? data.wishlist : data.rewards).find(
-        (x) => x.id === body.id,
-      );
-      if (
-        !item ||
-        item.deleted ||
-        (body.kind === "wish" && ["redeemed", "done"].includes(item.status))
-      ) {
+      const item = data.wishlist.find((x) => x.id === body.id);
+      if (!item || item.deleted || ["redeemed", "done"].includes(item.status)) {
         db.exec("ROLLBACK");
         return send(res, 400, { error: "该内容不存在或已经兑换" });
       }
@@ -99,12 +90,9 @@ module.exports = async function (req, res, pathname, s) {
           day: "2-digit",
         }).format(now);
       /* 属于「我们俩」的愿望：一人一半，且要两个人都点头 */
-      const existing =
-        body.kind === "wish"
-          ? data.redemptions.find(
-              (r) => r.status === "pending" && r.wishId === item.id,
-            )
-          : null;
+      const existing = data.redemptions.find(
+        (r) => r.status === "pending" && r.wishId === item.id,
+      );
       if (
         existing &&
         ((item.scope || "both") !== "both" ||
@@ -116,10 +104,9 @@ module.exports = async function (req, res, pathname, s) {
           error: "愿望内容已更改，请先取消旧申请再重新发起",
         });
       }
-      const shared = body.kind === "wish" && (item.scope || "both") === "both";
+      const shared = (item.scope || "both") === "both";
       /* 单人的愿望只有本人能兑，因为分在他自己的钱包里 */
       if (
-        body.kind === "wish" &&
         (item.scope || "both") !== "both" &&
         item.scope !== s.slot
       ) {
@@ -181,15 +168,14 @@ module.exports = async function (req, res, pathname, s) {
           memberId: s.slot,
           date,
           name: "兑换「" + item.name + "」",
-          wishId: body.kind === "wish" ? item.id : undefined,
-          rewardId: body.kind === "reward" ? item.id : undefined,
+          wishId: item.id,
           fromMe: s.slot === "me" ? cost : 0,
           fromHim: s.slot === "him" ? cost : 0,
           label: String(cost),
           wallet: "mine",
           status: "done",
         });
-        if (body.kind === "wish") item.status = "redeemed";
+        item.status = "redeemed";
       }
       const at = now.toISOString(),
         revision = row.revision + 1;

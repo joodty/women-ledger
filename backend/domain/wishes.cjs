@@ -20,22 +20,18 @@ module.exports = function ({
   create,
 }) {
   switch (type) {
-    case "wish.delete":
-    case "reward.delete": {
-      const collection = type === "wish.delete" ? "wishlist" : "rewards";
-      const item = find(collection);
+    case "wish.delete": {
+      const item = find("wishlist");
       fail(
         !["me", "him"].includes(item.scope) || item.scope === slot,
         "forbidden",
-        "只能删除自己的个人愿望或奖励",
+        "只能删除自己的个人愿望",
         403,
       );
-      version(collection, item);
+      version("wishlist", item);
       fail(
         !data.redemptions.some(
-          (r) =>
-            r.status === "pending" &&
-            (collection === "wishlist" ? r.wishId : r.rewardId) === item.id,
+          (r) => r.status === "pending" && r.wishId === item.id,
         ),
         "validation",
         "这项内容还有兑换申请，请先取消申请再删除",
@@ -43,18 +39,16 @@ module.exports = function ({
       item.deleted = true;
       break;
     }
-    case "wish.save":
-    case "reward.save": {
-      const collection = type === "wish.save" ? "wishlist" : "rewards",
-        old = data[collection].find((x) => x.id === p.id);
+    case "wish.save": {
+      const old = data.wishlist.find((x) => x.id === p.id);
       fail(!old?.deleted, "not_found", "这项内容已删除", 404);
       fail(
         !old || !["me", "him"].includes(old.scope) || old.scope === slot,
         "forbidden",
-        "只能修改自己的个人愿望或奖励",
+        "只能修改自己的个人愿望",
         403,
       );
-      if (old) version(collection, old);
+      if (old) version("wishlist", old);
       const label = String(p.pointsLabel || "待定").trim();
       fail(
         label === "待定" ||
@@ -63,12 +57,8 @@ module.exports = function ({
         "请输入 1–10000 的积分或待定",
       );
       const scope = ["me", "him", "both"].includes(p.scope) ? p.scope : "both";
-      if (collection === "wishlist" && scope === "both" && label !== "待定")
-        fail(
-          Number(label) % 2 === 0,
-          "validation",
-          "共同愿望积分需要能被二整除",
-        );
+      if (scope === "both" && label !== "待定")
+        fail(Number(label) % 2 === 0, "validation", "共同愿望积分需要能被二整除");
       const value = {
         ...(old || {}),
         id: id(p.id),
@@ -81,11 +71,10 @@ module.exports = function ({
         executorLabel: "我们一起",
         icon: p.icon || "star",
         cat: p.cat || "together",
-        tier: p.tier || "small",
         status: old?.status || "saving",
       };
       if (old) Object.assign(old, value);
-      else create(collection, value);
+      else create("wishlist", value);
       break;
     }
     case "wish.complete": {
@@ -94,7 +83,7 @@ module.exports = function ({
       fail(
         item.pointsLabel === "待定" ||
           !Number(item.pointsLabel) ||
-          item.status === "redeemed",
+        item.status === "redeemed",
         "validation",
         "需要先兑换这个愿望",
       );

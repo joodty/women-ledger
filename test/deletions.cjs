@@ -157,12 +157,10 @@ function balance(data, slot, wallet = "mine") {
       pointsLabel: "4",
       status: "saving",
     });
-    initial.data.rewards.push({
-      id: "legacy-reward",
-      name: "legacy shared reward",
-      pointsLabel: "4",
-      tier: "small",
-    });
+    /* 老客户端可能还会把 rewards 发上来，服务端应当默默收下而不是报错 */
+    initial.data.rewards = [
+      { id: "legacy-reward", name: "legacy reward", pointsLabel: "4" },
+    ];
     initial.data.milestones.push({
       id: "auto-goal-milestone",
       kind: "goal",
@@ -176,13 +174,13 @@ function balance(data, slot, wallet = "mine") {
         a,
       ),
     );
+    assert(
+      !("rewards" in (await snapshot(a)).data),
+      "rewards should not come back from the server",
+    );
     success(await deleteItem(b, "wish.delete", "wishlist", "legacy-wish"));
-    success(await deleteItem(b, "reward.delete", "rewards", "legacy-reward"));
     assert(
       !(await snapshot(a)).data.wishlist.some((x) => x.id === "legacy-wish"),
-    );
-    assert(
-      !(await snapshot(a)).data.rewards.some((x) => x.id === "legacy-reward"),
     );
     assert.equal(
       (
@@ -285,7 +283,7 @@ function balance(data, slot, wallet = "mine") {
       4,
     );
 
-    stage = "wish and reward deletion uses absolute owner slots";
+    stage = "wish deletion uses absolute owner slots";
     success(await send(a, "wish.save", wish("his-wish", "him")));
     const hisVersion = await version(a, "wishlist", "his-wish");
     assert.equal(
@@ -297,46 +295,39 @@ function balance(data, slot, wallet = "mine") {
       409,
     );
     success(await deleteItem(b, "wish.delete", "wishlist", "his-wish"));
-    success(await send(a, "reward.save", wish("own-reward", "me")));
-    const rewardVersion = await version(a, "rewards", "own-reward");
+    success(await send(a, "wish.save", wish("own-wish", "me")));
+    const wishVersion = await version(a, "wishlist", "own-wish");
     assert.equal(
-      (await send(b, "reward.delete", { id: "own-reward" }, rewardVersion))
-        .status,
+      (await send(b, "wish.delete", { id: "own-wish" }, wishVersion)).status,
       403,
     );
     assert.equal(
-      (
-        await send(
-          outsider,
-          "reward.delete",
-          { id: "own-reward" },
-          rewardVersion,
-        )
-      ).status,
+      (await send(outsider, "wish.delete", { id: "own-wish" }, wishVersion))
+        .status,
       404,
     );
-    success(await deleteItem(a, "reward.delete", "rewards", "own-reward"));
+    success(await deleteItem(a, "wish.delete", "wishlist", "own-wish"));
     assert(
-      !(await snapshot(b)).data.rewards.some((r) => r.id === "own-reward"),
+      !(await snapshot(b)).data.wishlist.some((r) => r.id === "own-wish"),
     );
     assert.equal(
       (
         await req(
           "/api/redeem",
           {
-            kind: "reward",
-            id: "own-reward",
-            requestId: "deleted-reward-attempt",
+            kind: "wish",
+            id: "own-wish",
+            requestId: "deleted-wish-attempt",
           },
           a,
         )
       ).status,
       400,
     );
-    success(await send(a, "reward.save", wish("shared-reward", "both")));
-    success(await deleteItem(b, "reward.delete", "rewards", "shared-reward"));
+    success(await send(a, "wish.save", wish("shared-wish", "both")));
+    success(await deleteItem(b, "wish.delete", "wishlist", "shared-wish"));
     assert(
-      !(await snapshot(a)).data.rewards.some((r) => r.id === "shared-reward"),
+      !(await snapshot(a)).data.wishlist.some((r) => r.id === "shared-wish"),
     );
 
     stage = "category deletion reassigns references safely";
@@ -466,16 +457,16 @@ function balance(data, slot, wallet = "mine") {
     success(
       await send(
         a,
-        "reward.save",
-        wish("spent-reward", "me", String(personalBefore)),
+        "wish.save",
+        wish("spent-wish", "me", String(personalBefore)),
       ),
     );
     success(
       await req(
         "/api/redeem",
         {
-          kind: "reward",
-          id: "spent-reward",
+          kind: "wish",
+          id: "spent-wish",
           requestId: "personal-redemption",
         },
         a,

@@ -25,7 +25,7 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  assert.equal((await req('/api/register',{username:'bob',password:pw,invitation:inv.data.token})).status,201);
  const b=await req('/api/login',{user:'bob',password:pw});assert.equal(b.data.user,'him');
 
- const base_data={version:4,couple:{since:'2026-01-01'},members:[{id:'me',name:'a'},{id:'him',name:'b'}],categories:[{id:'none',name:'未分类',color:'#D8D5D2'}],entries:[],goals:[],weekly_settlements:[],points_ledger:[],rewards:[],wishlist:[],story_entries:[],milestones:[],redemptions:[],sparks:[]};
+ const base_data={version:4,couple:{since:'2026-01-01'},members:[{id:'me',name:'a'},{id:'him',name:'b'}],categories:[{id:'none',name:'未分类',color:'#D8D5D2'}],entries:[],goals:[],weekly_settlements:[],points_ledger:[],wishlist:[],story_entries:[],milestones:[],redemptions:[],sparks:[]};
  assert.equal((await req('/api/state',{revision:0,data:base_data},a.cookie)).status,200);
 
  /* A. 共同目标 + 双方各自打卡 */

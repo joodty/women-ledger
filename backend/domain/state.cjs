@@ -7,7 +7,6 @@ function validState(s) {
     "goals",
     "weekly_settlements",
     "points_ledger",
-    "rewards",
     "wishlist",
     "story_entries",
     "milestones",
@@ -139,7 +138,7 @@ function mergeValue(base, local, remote) {
 }
 function visibleState(data, slot) {
   const result = structuredClone(data);
-  for (const key of ["goals", "wishlist", "rewards"])
+  for (const key of ["goals", "wishlist"])
     result[key] = result[key].filter((x) => !x.deleted);
   const hiddenGoals = new Set(
     data.goals

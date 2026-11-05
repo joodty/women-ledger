@@ -27,7 +27,6 @@ function seed(members) {
     goals: [],
     weekly_settlements: [],
     points_ledger: [],
-    rewards: [],
     wishlist: [],
     story_entries: [],
     milestones: [],

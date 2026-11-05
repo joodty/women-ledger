@@ -300,15 +300,13 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await expect
       .poll(async () => (await snapshot(a)).data.wishlist.length)
       .toBe(0);
-    /* 2026-11-05 愿望与奖励合并：/rewards 下线，老的 rewards 冻结只读并入愿望清单 */
+    /* 2026-11-05 奖励整块删掉：老客户端发上来的 rewards 服务端收下但不返回，
+       /rewards 页面也已经不存在了 */
     const seeded = await snapshot(a);
-    seeded.data.rewards.push({
-      id: "legacy-reward",
-      name: "以前的小奖励",
-      pointsLabel: "4",
-      executor: "me",
-      status: "open",
-    });
+    assert(!("rewards" in seeded.data), "bootstrap still returns rewards");
+    seeded.data.rewards = [
+      { id: "legacy-reward", name: "以前的小奖励", pointsLabel: "4" },
+    ];
     assert.equal(
       (
         await a.request.post(base + "/api/state", {
@@ -318,15 +316,14 @@ const server = spawn(process.execPath, ["server.cjs"], {
       ).status(),
       200,
     );
+    assert(
+      !("rewards" in (await snapshot(a)).data),
+      "rewards came back from the server",
+    );
     await a.goto(base + "/#/wishlist");
     await a.reload();
-    const legacy = a.locator(".wi-row").filter({ hasText: "以前的小奖励" });
-    await expect(legacy).toContainText("以前的奖励");
     await expect(
-      legacy.getByRole("button", {
-        name: "删除愿望：以前的小奖励",
-        exact: true,
-      }),
+      a.locator(".wi-row").filter({ hasText: "以前的小奖励" }),
     ).toHaveCount(0);
     await a.goto(base + "/#/rewards");
     await expect.poll(() => a.url()).toBe(base + "/#/");
@@ -379,7 +376,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
       });
     }
     console.log(
-      "PASS: restored mobile UI, two users, voice/10000 characters, offline/legacy recovery, story ownership and safe record/goal/category/wish deletion, frozen legacy rewards",
+      "PASS: restored mobile UI, two users, voice/10000 characters, offline/legacy recovery, story ownership and safe record/goal/category/wish deletion, rewards fully removed",
     );
   } finally {
     if (browser) await browser.close();

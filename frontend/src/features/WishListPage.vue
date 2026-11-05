@@ -3,39 +3,34 @@ import { computed, ref } from "vue";
 import { useSpace } from "../stores/space";
 import { useTask } from "../lib/task";
 import { confirmCommand } from "../lib/confirmCommand";
-import { useWishes } from "../lib/wishes";
-import type { WishItem } from "../lib/wishes";
+import type { Wish } from "../models";
 import PageHead from "../components/PageHead.vue";
 import Icon from "../components/Icon.vue";
 import WishEditor from "./wallet/WishEditor.vue";
 const s = useSpace(),
   task = useTask(),
-  { all, isDone } = useWishes(),
   editor = ref(false),
-  editing = ref<WishItem>();
-/* 以前分「愿望」和「奖励」两套清单，一个按谁的、一个按小中大，
-   而两者都是「攒够分换一件事」，区别只是分组方式。现在只有一份。 */
-const scoped = (w: WishItem) => w.scope || "both";
-const sortByPoints = (a: WishItem, b: WishItem) =>
+  editing = ref<Wish>();
+const scoped = (w: Wish) => w.scope || "both";
+const isDone = (w: Wish) => ["done", "redeemed"].includes(w.status || "");
+const sortByPoints = (a: Wish, b: Wish) =>
   (Number(a.pointsLabel) || 10001) - (Number(b.pointsLabel) || 10001);
 const openOf = (both: boolean) =>
-  all.value
+  s.data.wishlist
     .filter((w) => !isDone(w) && (scoped(w) === "both") === both)
     .sort(sortByPoints);
-const doneList = computed(() => all.value.filter(isDone));
-/* 老奖励冻结只读：能看、能兑，不给改删入口 */
-const mine = (w: WishItem) =>
+const doneList = computed(() => s.data.wishlist.filter(isDone));
+const owned = (w: Wish) =>
   !w.scope || w.scope === "both" || w.scope === s.slot;
-const owned = (w: WishItem) => !w.legacy && mine(w);
-const whose = (w: WishItem) => {
+const whose = (w: Wish) => {
   const k = scoped(w);
   return k === "both" ? "我们一起" : k === s.slot ? "我的" : "对方的";
 };
-function edit(w?: WishItem) {
+function edit(w?: Wish) {
   editing.value = w;
   editor.value = true;
 }
-function remove(w: WishItem) {
+function remove(w: Wish) {
   task.run(async () => {
     await confirmCommand(
       s,
@@ -80,9 +75,7 @@ function remove(w: WishItem) {
               ><span class="wi-name">{{ w.name }}</span
               ><span class="wi-meta"
                 >{{ both ? "我们一起" : whose(w) }} ·
-                {{ w.pointsLabel }} 分<template v-if="w.legacy">
-                  · 以前的奖励</template
-                ></span
+                {{ w.pointsLabel }} 分</span
               ></span
             ><button
               v-if="owned(w)"
@@ -98,7 +91,7 @@ function remove(w: WishItem) {
               @click="remove(w)"
             >
               <Icon name="trash" :size="15" /></button
-            ><RouterLink v-if="mine(w)" class="wi-btn saving" to="/points"
+            ><RouterLink v-if="owned(w)" class="wi-btn saving" to="/points"
               >去兑换<Icon name="right" :size="12" /></RouterLink
             ><span v-else class="wi-btn his">对方来兑</span>
           </article>
@@ -119,9 +112,7 @@ function remove(w: WishItem) {
           <span class="wi-main"
             ><span class="wi-name">{{ w.name }}</span
             ><span class="wi-meta"
-              >{{ w.pointsLabel }} 分 · 已完成<template v-if="w.legacy">
-                · 以前的奖励</template
-              ></span
+              >{{ w.pointsLabel }} 分 · 已完成</span
             ></span
           ><button
             v-if="owned(w)"
