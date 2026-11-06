@@ -138,15 +138,6 @@ function remove() {
           <span class="count-badge">{{ f.content.length }}/10000</span>
         </div>
       </div>
-      <button
-        type="button"
-        class="more-toggle"
-        :aria-expanded="more"
-        @click="more = !more"
-      >
-        {{ more ? "－ 更多" : "＋ 更多" }}
-      </button>
-      <template v-if="more">
       <div class="field">
         <div class="field-k">分类<i>选填</i></div>
         <div class="chips">
@@ -164,6 +155,15 @@ function remove() {
         </div>
         <div class="chip-hint">可以不选分类，先记下来。</div>
       </div>
+      <button
+        type="button"
+        class="more-toggle"
+        :aria-expanded="more"
+        @click="more = !more"
+      >
+        {{ more ? "－ 更多" : "＋ 更多" }}
+      </button>
+      <template v-if="more">
       <label class="field"
         ><span class="field-k">计入目标<i>选填</i></span
         ><select
