@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useSpace } from "../stores/space";
 import { useTask } from "../lib/task";
 import { post } from "../lib/api";
@@ -7,23 +7,25 @@ import { confirmCommand } from "../lib/confirmCommand";
 import { monthDay } from "../lib/presentation";
 import PageHead from "../components/PageHead.vue";
 import Icon from "../components/Icon.vue";
+import RedeemSheet from "./wallet/RedeemSheet.vue";
 import type { Wish, Redemption } from "../models";
 const s = useSpace(),
   task = useTask();
+const asking = ref<Wish>(),
+  confirming = ref(false);
 const isDone = (w: Wish) => ["done", "redeemed"].includes(w.status || "");
-const each = (w: Wish) => (w.scope || "both") === "both";
-function gap(w: Wish) {
-  const cost = Number(w.pointsLabel);
-  if (!cost) return Infinity;
-  if (w.scope && w.scope !== "both" && w.scope !== s.slot) return Infinity;
-  return (w.scope || "both") === "both"
-    ? Math.max(
-        0,
-        cost / 2 - s.balance(s.slot, "ours"),
-        cost / 2 - s.balance(s.other, "ours"),
-      )
-    : Math.max(0, cost - s.balance(s.slot));
-}
+const shared = (w: Wish) => (w.scope || "both") === "both";
+const cost = (w: Wish) => {
+  const n = Number(w.pointsLabel);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+/* 我能付的：共同愿望看双人池；自己的单人愿望看自己的分；对方的单人愿望付不了 */
+const payable = (w: Wish) => shared(w) || (w.scope || "both") === s.slot;
+const gap = (w: Wish) => {
+  if (!cost(w) || !payable(w)) return Infinity;
+  const have = shared(w) ? s.poolOurs() : s.balance(s.slot);
+  return Math.max(0, cost(w) - have);
+};
 const wishes = computed(() =>
   s.data.wishlist
     .filter((w) => !isDone(w))
@@ -44,18 +46,9 @@ const history = computed(() =>
     .slice()
     .reverse(),
 );
-function redeem(w: Wish) {
-  if (
-    confirm(
-      (w.scope || "both") === "both"
-        ? `兑换「${w.name}」需双方各付 ${Number(w.pointsLabel) / 2} 共同分，继续？`
-        : `用 ${w.pointsLabel} 分兑换「${w.name}」？`,
-    )
-  )
-    task.run(async () => {
-      await s.redeem(w.id);
-      s.notice = "兑换请求已处理";
-    });
+function ask(w: Wish, asConfirm = false) {
+  asking.value = w;
+  confirming.value = asConfirm;
 }
 function cancel(r: Redemption) {
   if (confirm("取消这次兑换申请？尚未扣除积分。"))
@@ -72,7 +65,7 @@ function reverse(r: Redemption) {
       "redemptions",
       r.id,
       r.wallet === "ours"
-        ? "撤销这次共同兑换需要双方确认，双方确认后退回各自积分。"
+        ? "撤销这次共同兑换需要双方确认，双方确认后退回双人池。"
         : "撤销这次兑换并退回个人积分？",
       "撤销兑换",
     );
@@ -85,17 +78,13 @@ function reverse(r: Redemption) {
     <section class="card">
       <div class="pool" style="grid-template-columns: 1fr 1fr">
         <div class="pool-cell me">
-          <div class="pool-k">我们的分</div>
-          <div class="pool-v" aria-label="我的共同积分">
-            {{ s.balance(s.slot, "ours") }}
-          </div>
-          <div class="pool-d">一起做的事 · 各出一半</div>
+          <div class="pool-k">我们一起的分</div>
+          <div class="pool-v" aria-label="双人池共同积分">{{ s.poolOurs() }}</div>
+          <div class="pool-d">一起做的事从这里扣</div>
         </div>
         <div class="pool-cell him">
           <div class="pool-k">我的分</div>
-          <div class="pool-v" aria-label="我的个人积分">
-            {{ s.balance(s.slot) }}
-          </div>
+          <div class="pool-v" aria-label="我的个人积分">{{ s.balance(s.slot) }}</div>
           <div class="pool-d">只属于我的事</div>
         </div>
       </div>
@@ -116,7 +105,7 @@ function reverse(r: Redemption) {
         ><button
           v-if="r.memberId !== s.slot && byId(r.wishId)"
           class="wish-btn"
-          @click="redeem(byId(r.wishId)!)"
+          @click="ask(byId(r.wishId)!, true)"
         >
           去确认</button
         ><button class="wish-btn saving" @click="cancel(r)">取消申请</button>
@@ -124,7 +113,7 @@ function reverse(r: Redemption) {
     </section>
     <section class="card">
       <div class="card-title">
-        想做的事<RouterLink class="card-link" to="/wishlist"
+        愿望清单<RouterLink class="card-link" to="/wishlist"
           >管理<Icon name="right" :size="12"
         /></RouterLink>
       </div>
@@ -136,39 +125,24 @@ function reverse(r: Redemption) {
         ><span class="wish-main"
           ><span class="task-top"
             ><span class="wish-name">{{ w.name }}</span
-            ><span v-if="w.scope !== 'both'" class="task-who">{{
+            ><span v-if="!shared(w)" class="task-who">{{
               w.scope === s.other ? "对方的" : "我的"
             }}</span
-            ><button
-              v-if="Number.isFinite(gap(w))"
-              class="wish-btn"
-              :disabled="gap(w) > 0"
-              @click="redeem(w)"
-            >
-              {{ gap(w) > 0 ? `${each(w) ? "各差" : "还差"} ${gap(w)} 分` : "去兑换" }}</button
-            ><span v-else class="task-gap off">{{
-              Number(w.pointsLabel) ? "对方来兑" : "没定分值"
-            }}</span></span
-          >
-          <div v-if="gap(w) > 0 && Number.isFinite(gap(w))" class="task-bar">
-            <i
-              :style="{
-                width:
-                  Math.max(
-                    0,
-                    100 -
-                      (gap(w) /
-                        (Number(w.pointsLabel) /
-                          ((w.scope || 'both') === 'both' ? 2 : 1))) *
-                        100,
-                  ) + '%',
-                background: 'var(--pink)',
-              }"
-            ></i></div
-        ></span>
+            ><span v-if="!cost(w)" class="task-gap off">没定分值</span
+            ><span v-else-if="!payable(w)" class="task-gap off">对方来兑</span
+            ><button v-else class="wish-btn" :disabled="gap(w) > 0" @click="ask(w)">
+              去兑换</button
+            ></span
+          ><span class="task-num"
+            >{{ cost(w) ? cost(w) + " 分" : "待定"
+            }}<em v-if="gap(w) > 0 && Number.isFinite(gap(w))">
+              · 还差 {{ gap(w) }} 分</em
+            ></span
+          ></span
+        >
       </article>
       <div v-if="!wishes.length" class="empty">
-        还没有想做的事。<br />点右上角「管理」，加一条。
+        还没有加过愿望。<br />点右上角「管理」，加一条。
       </div>
     </section>
     <section class="card">
@@ -201,5 +175,12 @@ function reverse(r: Redemption) {
       <div v-if="!history.length" class="empty">还没兑换过。</div>
     </section>
     <p class="v2-error" role="alert">{{ task.error.value }}</p>
+    <RedeemSheet
+      v-if="asking"
+      :key="asking.id"
+      :wish="asking"
+      :confirming="confirming"
+      @close="asking = undefined"
+    />
   </div>
 </template>

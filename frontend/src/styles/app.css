@@ -543,7 +543,9 @@ button:disabled {
   cursor: not-allowed;
 }
 .wish-btn:disabled {
-  opacity: 0.55;
+  background: var(--gray-soft);
+  color: var(--ink-4);
+  cursor: not-allowed;
 }
 .task-top .wish-name {
   min-width: 0;
@@ -934,11 +936,6 @@ button:disabled {
   opacity: 0.75;
 }
 
-/* 进度条变细，别再抢戏；要读的是旁边那个数字 */
-.task-bar,
-.task-bar i {
-  height: 2px;
-}
 .wish-btn {
   font-weight: 500;
   font-variant-numeric: tabular-nums;

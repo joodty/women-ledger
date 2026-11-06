@@ -104,7 +104,7 @@ function remove() {
           </button>
         </div>
         <div class="chip-hint">
-          个人的用自己的分；共同的各出一半，要两个人都点头。
+          个人的从自己的分里扣；共同的从我们一起的分里扣，要两个人都点头。
         </div>
       </div>
       <div class="field">

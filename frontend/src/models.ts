@@ -89,6 +89,7 @@ export interface Redemption {
   status?: string;
   fromMe?: number;
   fromHim?: number;
+  fromOurs?: number;
   wallet?: "mine" | "ours";
   wishId?: string;
   rewardId?: string;

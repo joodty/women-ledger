@@ -82,6 +82,23 @@ module.exports = async function (req, res, pathname, s) {
             (n, r) => n + (slot === "me" ? r.fromMe || 0 : r.fromHim || 0),
             0,
           );
+      /* 双人池：所有共同分加在一起，不分你我。
+         历史里「各出一半」的兑换记录拆成了 fromMe / fromHim，两半相加就是它从池子里扣掉的总额。 */
+      const fromOurs = (r) =>
+        Number.isFinite(r.fromOurs)
+          ? r.fromOurs
+          : (r.fromMe || 0) + (r.fromHim || 0);
+      const poolOurs =
+        data.points_ledger
+          .filter((p) => walletTag(p) === "ours")
+          .reduce((n, p) => n + (Number.isFinite(p.points) ? p.points : 0), 0) -
+        data.redemptions
+          .filter(
+            (r) =>
+              !["pending", "cancelled", "reversed"].includes(r.status) &&
+              walletTag(r) === "ours",
+          )
+          .reduce((n, r) => n + fromOurs(r), 0);
       const now = new Date(),
         date = new Intl.DateTimeFormat("en-CA", {
           timeZone: "Asia/Shanghai",
@@ -89,7 +106,7 @@ module.exports = async function (req, res, pathname, s) {
           month: "2-digit",
           day: "2-digit",
         }).format(now);
-      /* 属于「我们俩」的愿望：一人一半，且要两个人都点头 */
+      /* 属于「我们俩」的愿望：从双人池里扣，不分你我，但要两个人都点头 */
       const existing = data.redemptions.find(
         (r) => r.status === "pending" && r.wishId === item.id,
       );
@@ -115,34 +132,28 @@ module.exports = async function (req, res, pathname, s) {
       }
       let waiting = false;
       if (shared) {
-        if (cost % 2 !== 0) {
-          db.exec("ROLLBACK");
-          return send(res, 400, { error: "两个人的兑换，分值要能被 2 整除" });
-        }
-        const half = cost / 2,
-          open = existing;
+        const open = existing;
         if (open && open.memberId === s.slot) {
           db.exec("ROLLBACK");
           return send(res, 409, { error: "已经发出去了，等对方确认" });
         }
         if (open) {
-          if (balance("me", "ours") < half || balance("him", "ours") < half) {
+          /* 对方点头：按发起时冻结的份额从双人池扣，池子余额变了就不算数 */
+          if (poolOurs < fromOurs(open)) {
             db.exec("ROLLBACK");
             return send(res, 400, {
-              error: "说好一人一半，现在两个人的共同分还不够",
+              error: "共同分变了，这次兑不了，请让对方重新发起",
             });
           }
-          open.fromMe = half;
-          open.fromHim = half;
           open.status = "done";
           open.date = date;
           open.confirmedBy = s.slot;
           open.confirmRequestId = body.requestId;
           item.status = "redeemed";
         } else {
-          if (balance(s.slot, "ours") < half) {
+          if (poolOurs < cost) {
             db.exec("ROLLBACK");
-            return send(res, 400, { error: "你的共同分还不够付这一半" });
+            return send(res, 400, { error: "我们一起的分还不够" });
           }
           data.redemptions.push({
             id: body.requestId,
@@ -150,8 +161,7 @@ module.exports = async function (req, res, pathname, s) {
             date,
             name: "兑换「" + item.name + "」",
             wishId: item.id,
-            fromMe: 0,
-            fromHim: 0,
+            fromOurs: cost,
             label: String(cost),
             wallet: "ours",
             status: "pending",

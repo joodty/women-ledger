@@ -7,12 +7,25 @@ import type { Wish } from "../models";
 import PageHead from "../components/PageHead.vue";
 import Icon from "../components/Icon.vue";
 import WishEditor from "./wallet/WishEditor.vue";
+import RedeemSheet from "./wallet/RedeemSheet.vue";
 const s = useSpace(),
   task = useTask(),
   editor = ref(false),
-  editing = ref<Wish>();
+  editing = ref<Wish>(),
+  asking = ref<Wish>();
 const scoped = (w: Wish) => w.scope || "both";
 const isDone = (w: Wish) => ["done", "redeemed"].includes(w.status || "");
+const shared = (w: Wish) => (w.scope || "both") === "both";
+const cost = (w: Wish) => {
+  const n = Number(w.pointsLabel);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+const payable = (w: Wish) => shared(w) || (w.scope || "both") === s.slot;
+const gap = (w: Wish) => {
+  if (!cost(w) || !payable(w)) return Infinity;
+  const have = shared(w) ? s.poolOurs() : s.balance(s.slot);
+  return Math.max(0, cost(w) - have);
+};
 const sortByPoints = (a: Wish, b: Wish) =>
   (Number(a.pointsLabel) || 10001) - (Number(b.pointsLabel) || 10001);
 const openOf = (both: boolean) =>
@@ -53,7 +66,7 @@ function remove(w: Wish) {
       <p class="v2-error" role="alert">{{ task.error.value }}</p>
       <section class="card">
         <div class="card-title">
-          想做的事<button class="wg-add" @click="edit()">
+          愿望清单<button class="wg-add" @click="edit()">
             <Icon name="plus" :size="12" />新增愿望
           </button>
         </div>
@@ -74,8 +87,12 @@ function remove(w: Wish) {
             ><span class="wi-main"
               ><span class="wi-name">{{ w.name }}</span
               ><span class="wi-meta"
-                >{{ both ? "我们一起" : whose(w) }} ·
-                {{ w.pointsLabel }} 分</span
+                ><template v-if="!both">{{ whose(w) }} · </template
+                >{{ w.pointsLabel }} 分<em
+                  v-if="gap(w) > 0 && Number.isFinite(gap(w))"
+                >
+                  · 还差 {{ gap(w) }} 分</em
+                ></span
               ></span
             ><button
               v-if="owned(w)"
@@ -91,16 +108,23 @@ function remove(w: Wish) {
               @click="remove(w)"
             >
               <Icon name="trash" :size="15" /></button
-            ><RouterLink v-if="owned(w)" class="wi-btn saving" to="/points"
-              >去兑换<Icon name="right" :size="12" /></RouterLink
-            ><span v-else class="wi-btn his">对方来兑</span>
+            ><button
+              v-if="cost(w) && payable(w)"
+              class="wi-btn"
+              :class="gap(w) > 0 ? 'saving' : 'ready'"
+              :disabled="gap(w) > 0"
+              @click="asking = w"
+            >
+              去兑换</button
+            ><span v-else-if="cost(w)" class="wi-btn his">对方来兑</span
+            ><span v-else class="wi-btn his">待定</span>
           </article>
           <div
             v-if="!openOf(both).length"
             class="empty"
             style="padding: 10px 0"
           >
-            还没有{{ both ? "两个人一起" : "只属于一个人" }}想做的事。
+            还没有{{ both ? "两个人一起" : "只属于一个人" }}的愿望。
           </div>
         </section>
       </section>
@@ -130,6 +154,12 @@ function remove(w: Wish) {
         :key="editing?.id || 'new'"
         :wish="editing"
         @close="editor = false"
+      />
+      <RedeemSheet
+        v-if="asking"
+        :key="asking.id"
+        :wish="asking"
+        @close="asking = undefined"
       />
     </div>
   </div>

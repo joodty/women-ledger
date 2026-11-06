@@ -106,6 +106,23 @@ function balance(data, slot, wallet = "mine") {
       .reduce((n, r) => n + (slot === "me" ? r.fromMe || 0 : r.fromHim || 0), 0)
   );
 }
+/* 共同分是一个不分你我的双人池，扣分不落在某个人头上 */
+function poolOurs(data) {
+  const fromOurs = (r) =>
+    Number.isFinite(r.fromOurs) ? r.fromOurs : (r.fromMe || 0) + (r.fromHim || 0);
+  return (
+    data.points_ledger
+      .filter((p) => (p.wallet || "mine") === "ours")
+      .reduce((n, p) => n + p.points, 0) -
+    data.redemptions
+      .filter(
+        (r) =>
+          !["pending", "cancelled", "reversed"].includes(r.status) &&
+          (r.wallet || "mine") === "ours",
+      )
+      .reduce((n, r) => n + fromOurs(r), 0)
+  );
+}
 (async () => {
   try {
     let ready = false;
@@ -579,7 +596,7 @@ function balance(data, slot, wallet = "mine") {
       400,
     );
     success(await req("/api/redeem/cancel", { id: "pending-redemption" }, b));
-    assert.equal(balance((await snapshot(a)).data, "me", "ours"), 3);
+    assert.equal(poolOurs((await snapshot(a)).data), 6);
     success(await deleteItem(b, "wish.delete", "wishlist", "pending-wish"));
 
     stage = "shared redemption reversal requires both people, refunds once";
@@ -604,8 +621,7 @@ function balance(data, slot, wallet = "mine") {
     );
     const sharedDone = await snapshot(a),
       sharedVersion = sharedDone.versions.redemptions["shared-redemption"];
-    assert.equal(balance(sharedDone.data, "me", "ours"), 1);
-    assert.equal(balance(sharedDone.data, "him", "ours"), 1);
+    assert.equal(poolOurs(sharedDone.data), 2, "四分的愿望从双人池里扣掉了四分");
     success(
       await send(
         a,
@@ -619,8 +635,8 @@ function balance(data, slot, wallet = "mine") {
     assert.equal(red.reverseRequestedBy, "me");
     assert.equal(red.status, "done");
     assert.equal(
-      balance(state.data, "me", "ours"),
-      1,
+      poolOurs(state.data),
+      2,
       "one person's request cannot refund",
     );
     assert.equal(
@@ -656,8 +672,7 @@ function balance(data, slot, wallet = "mine") {
       state.data.redemptions.find((r) => r.id === "shared-redemption").status,
       "reversed",
     );
-    assert.equal(balance(state.data, "me", "ours"), 3);
-    assert.equal(balance(state.data, "him", "ours"), 3);
+    assert.equal(poolOurs(state.data), 6);
     assert.equal(
       state.data.wishlist.find((w) => w.id === "completed-wish").status,
       "saving",
@@ -671,8 +686,8 @@ function balance(data, slot, wallet = "mine") {
       ),
     );
     assert.equal(
-      balance((await snapshot(a)).data, "me", "ours"),
-      3,
+      poolOurs((await snapshot(a)).data),
+      6,
       "repeated reversal cannot mint points",
     );
     stage = "reversal does not resurrect an already deleted shared wish";
@@ -720,8 +735,7 @@ function balance(data, slot, wallet = "mine") {
     );
     state = await snapshot(a);
     assert(!state.data.wishlist.some((w) => w.id === "deleted-after-redeem"));
-    assert.equal(balance(state.data, "me", "ours"), 3);
-    assert.equal(balance(state.data, "him", "ours"), 3);
+    assert.equal(poolOurs(state.data), 6);
     assert.equal((await snapshot(outsider)).data.redemptions.length, 0);
     console.log(
       "PASS: isolated deletion ownership, versions, idempotency, linked records/points, shared cleanup and two-person redemption reversal",

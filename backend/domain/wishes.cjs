@@ -57,8 +57,6 @@ module.exports = function ({
         "请输入 1–10000 的积分或待定",
       );
       const scope = ["me", "him", "both"].includes(p.scope) ? p.scope : "both";
-      if (scope === "both" && label !== "待定")
-        fail(Number(label) % 2 === 0, "validation", "共同愿望积分需要能被二整除");
       const value = {
         ...(old || {}),
         id: id(p.id),

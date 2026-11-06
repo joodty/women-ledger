@@ -964,17 +964,81 @@ svg {
 .task-gap.off {
   color: var(--ink-4);
 }
-.task-bar {
-  height: 3px;
-  border-radius: 2px;
-  background: var(--line-2);
-  margin-top: 8px;
-  overflow: hidden;
-}
-.task-bar i {
+/* 条目第二行：要多少分 · 还差多少分。数字用等宽，几行竖着扫能对齐 */
+.task-num {
   display: block;
-  height: 3px;
-  border-radius: 2px;
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.task-num em {
+  font-style: normal;
+  color: var(--pink-ink);
+}
+
+/* ---------------- 兑换确认弹层 ---------------- */
+.rd-what {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+.rd-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--pink-soft);
+  color: var(--pink-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.rd-name {
+  font-size: 16px;
+  letter-spacing: 0.3px;
+}
+.rd-line {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  line-height: 1.9;
+}
+.rd-line b {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rd-hint {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 8px;
+}
+.rd-acts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 20px;
+}
+.rd-acts button {
+  height: 46px;
+  border-radius: 15px;
+  font-size: 14.5px;
+  letter-spacing: 0.5px;
+}
+.rd-no {
+  background: var(--gray-soft);
+  color: var(--ink-2);
+}
+.rd-ok {
+  background: var(--pink);
+  color: #fff;
+}
+.rd-ok:disabled,
+.rd-no:disabled {
+  opacity: 0.6;
 }
 
 /* ---------------- 故事接龙卡 ---------------- */
@@ -2281,6 +2345,14 @@ svg {
 .wi-btn.saving {
   background: var(--gray-soft);
   color: var(--ink-2);
+}
+.wi-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.wi-meta em {
+  font-style: normal;
+  color: var(--pink-ink);
 }
 /* 已做过的：整行退到后面，不做成可点的样子 */
 .wi-done .wi-name {

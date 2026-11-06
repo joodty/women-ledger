@@ -130,27 +130,46 @@ function reconcilePoints(before, after) {
     });
   }
   after.points_ledger = ledger;
-  for (const slot of ["me", "him"])
-    for (const wallet of ["mine", "ours"]) {
-      const earned = ledger
-        .filter((p) => p.memberId === slot && walletTag(p) === wallet)
-        .reduce((n, p) => n + (Number.isFinite(p.points) ? p.points : 0), 0);
-      const spent = after.redemptions
-        .filter(
-          (r) =>
-            !["pending", "cancelled", "reversed"].includes(r.status) &&
-            walletTag(r) === wallet,
-        )
-        .reduce(
-          (n, r) => n + (slot === "me" ? r.fromMe || 0 : r.fromHim || 0),
-          0,
-        );
-      fail(
-        earned >= spent,
-        "validation",
-        "已兑换积分，请先撤销对应兑换，再删除或修改这条打卡",
-        400,
+  /* 共同分是一个不分你我的双人池，所以「够不够扣」按池子总额判断；
+     个人分仍按各自的钱包判断。 */
+  const fromOurs = (r) =>
+    Number.isFinite(r.fromOurs) ? r.fromOurs : (r.fromMe || 0) + (r.fromHim || 0);
+  const spentOurs = after.redemptions
+    .filter(
+      (r) =>
+        !["pending", "cancelled", "reversed"].includes(r.status) &&
+        walletTag(r) === "ours",
+    )
+    .reduce((n, r) => n + fromOurs(r), 0);
+  const earnedOurs = ledger
+    .filter((p) => walletTag(p) === "ours")
+    .reduce((n, p) => n + (Number.isFinite(p.points) ? p.points : 0), 0);
+  fail(
+    earnedOurs >= spentOurs,
+    "validation",
+    "已兑换积分，请先撤销对应兑换，再删除或修改这条打卡",
+    400,
+  );
+  for (const slot of ["me", "him"]) {
+    const earned = ledger
+      .filter((p) => p.memberId === slot && walletTag(p) === "mine")
+      .reduce((n, p) => n + (Number.isFinite(p.points) ? p.points : 0), 0);
+    const spent = after.redemptions
+      .filter(
+        (r) =>
+          !["pending", "cancelled", "reversed"].includes(r.status) &&
+          walletTag(r) === "mine",
+      )
+      .reduce(
+        (n, r) => n + (slot === "me" ? r.fromMe || 0 : r.fromHim || 0),
+        0,
       );
-    }
+    fail(
+      earned >= spent,
+      "validation",
+      "已兑换积分，请先撤销对应兑换，再删除或修改这条打卡",
+      400,
+    );
+  }
 }
 module.exports = { reconcilePoints, walletTag };

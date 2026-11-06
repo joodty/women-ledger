@@ -9,6 +9,7 @@ import type {
   Command,
   Slot,
   Goal,
+  Redemption,
 } from "../models";
 import { today, weekStart } from "../lib/date";
 const empty: SpaceData = {
@@ -233,6 +234,24 @@ export const useSpace = defineStore("space", () => {
         .reduce((n, r) => n + (id === "me" ? r.fromMe || 0 : r.fromHim || 0), 0)
     );
   }
+  /* 双人池：一起做的事赚到的分，全部流进这里，只有一个数，不分你我。
+     历史里「各出一半」的兑换拆成了 fromMe / fromHim，两半相加就是它从池子里扣掉的总额。 */
+  function poolOurs() {
+    const fromOurs = (r: Redemption) =>
+      Number.isFinite(r.fromOurs) ? r.fromOurs! : (r.fromMe || 0) + (r.fromHim || 0);
+    return (
+      data.value.points_ledger
+        .filter((p) => (p.wallet || "mine") === "ours")
+        .reduce((n, p) => n + p.points, 0) -
+      data.value.redemptions
+        .filter(
+          (r) =>
+            !["pending", "cancelled", "reversed"].includes(r.status || "") &&
+            (r.wallet || "mine") === "ours",
+        )
+        .reduce((n, r) => n + fromOurs(r), 0)
+    );
+  }
   /* 谁的进度：看自己用 progress()，看对方用 progressOf()。
      两个人的进度必须分开数，否则「各自做到的」会把对方算进自己身上。 */
   function progressOf(g: Goal, memberId: Slot) {
@@ -341,6 +360,7 @@ export const useSpace = defineStore("space", () => {
     resolve,
     member,
     balance,
+    poolOurs,
     progress,
     progressOf,
     reached,

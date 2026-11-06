@@ -6,11 +6,17 @@ import Icon from "./components/Icon.vue";
 import type { Pending } from "./models";
 import { useTask } from "./lib/task";
 import { connectNative, clearNative } from "./lib/native";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 const s = useSpace(),
   showPending = ref(false),
   task = useTask();
 const router = useRouter();
+const route = useRoute();
+/* 愿望清单是兑换页管出来的子页，进它的时候底部「兑换」要亮着，不然看不出自己在哪 */
+function tabOn(path: string) {
+  if (path === "/points") return route.path === "/points" || route.path === "/wishlist";
+  return route.path === path;
+}
 function refreshPage() {
   location.reload();
 }
@@ -118,7 +124,7 @@ function readable(value: unknown) {
         :key="path"
         :to="path"
         class="tab"
-        :class="{ on: $route.path === path }"
+        :class="{ on: tabOn(path) }"
         ><span class="tab-ico-wrap"><Icon :name="icon" :size="22" /></span
         ><span>{{ label }}</span></RouterLink
       >

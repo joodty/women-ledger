@@ -1,7 +1,7 @@
 'use strict';
 /* 两个钱包：个人分 / 共同分。
    - 共同目标谁打卡都算，得分进「我们的分」
-   - 共同愿望一人一半，分值必须偶数，且要两个人都点头
+   - 共同分是一个不分你我的双人池，共同愿望从池子里扣，要两个人都点头
    - 个人愿望只扣自己的分，一个人就能兑
    - 记一笔每天最多发 3 分 */
 const {spawn}=require('node:child_process');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const assert=require('node:assert/strict');
@@ -12,6 +12,13 @@ const wallet=x=>x&&x.wallet==='ours'?'ours':'mine';
 function balance(data,slot,walletName){
  const earned=data.points_ledger.filter(p=>p.memberId===slot&&wallet(p)===walletName).reduce((n,p)=>n+p.points,0);
  const spent=data.redemptions.filter(r=>r.status!=='pending'&&wallet(r)===walletName).reduce((n,r)=>n+(slot==='me'?(r.fromMe||0):(r.fromHim||0)),0);
+ return earned-spent;
+}
+/* 双人池：所有共同分加在一起，历史里各出一半的旧记录按两半相加算 */
+function poolOurs(data){
+ const fromOurs=r=>Number.isFinite(r.fromOurs)?r.fromOurs:(r.fromMe||0)+(r.fromHim||0);
+ const earned=data.points_ledger.filter(p=>wallet(p)==='ours').reduce((n,p)=>n+p.points,0);
+ const spent=data.redemptions.filter(r=>!['pending','cancelled','reversed'].includes(r.status)&&wallet(r)==='ours').reduce((n,r)=>n+fromOurs(r),0);
  return earned-spent;
 }
 async function get(cookie){const r=await req('/api/state',null,cookie);return {revision:r.data.revision,data:r.data.data};}
@@ -77,26 +84,25 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  s=await get(a.cookie);s.data.wishlist.find(x=>x.id==='w1').pointsLabel='10';assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
  assert.equal((await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-a-reopen'},a.cookie)).status,200);
 
- /* E. 对方点头才真正扣分，一人一半 */
+ /* E. 对方点头才真正扣分，从双人池里扣，不落到某个人头上 */
  r=await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-b-1'},b.cookie);
  assert.equal(r.status,200,'对方确认');
  assert.equal(r.data.pending,false);
  const done=r.data.data.redemptions.find(x=>x.wishId==='w1'&&x.status==='done');
  assert.equal(done.status,'done');
- assert.equal(done.fromMe,5,'我出一半');
- assert.equal(done.fromHim,5,'他出一半');
- assert.equal(balance(r.data.data,'me','ours'),1);
- assert.equal(balance(r.data.data,'him','ours'),1);
+ assert.equal(done.fromOurs,10,'十分整笔从双人池扣');
+ assert.equal(poolOurs(r.data.data),2,'两人的共同分合起来十二，扣掉十剩二');
+ assert.equal(balance(r.data.data,'me','ours'),6,'扣分不落在某个人头上');
  assert.equal(r.data.data.wishlist.find(x=>x.id==='w1').status,'redeemed');
- const confirmedRevision=r.data.revision;const retry=await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-b-1'},b.cookie);assert.equal(retry.status,200);assert.equal(retry.data.revision,confirmedRevision);assert.equal(balance(retry.data.data,'me','ours'),1);
+ const confirmedRevision=r.data.revision;const retry=await req('/api/redeem',{kind:'wish',id:'w1',requestId:'req-b-1'},b.cookie);assert.equal(retry.status,200);assert.equal(retry.data.revision,confirmedRevision);assert.equal(poolOurs(retry.data.data),2);
 
- /* F. 奇数分不能两个人兑 */
+ /* F. 共同愿望不必是偶数；这时池子只剩两分，提示的应该是分不够 */
  s=await get(a.cookie);
  s.data.wishlist.push({id:'w2',cat:'go',name:'看星星',pointsLabel:'9',scope:'both',status:'saving',executor:'both',executorLabel:'我们一起'});
  assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
  r=await req('/api/redeem',{kind:'wish',id:'w2',requestId:'req-a-3'},a.cookie);
  assert.equal(r.status,400);
- assert.match(r.data.error,/2 整除/);
+ assert.match(r.data.error,/我们一起的分还不够/);
 
  /* G. 个人愿望：一个人就能兑，只扣我的分 */
  s=await get(a.cookie);
@@ -106,7 +112,8 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  assert.equal(r.status,200);
  assert.equal(r.data.pending,false,'个人愿望不需要等对方');
  assert.equal(balance(r.data.data,'me','mine'),8,'从我的分里扣 3');
- assert.equal(balance(r.data.data,'me','ours'),1,'共同分不受影响');
+ assert.equal(balance(r.data.data,'me','ours'),6,'个人愿望不动共同分');
+ assert.equal(poolOurs(r.data.data),2,'双人池也不受影响');
 
  /* H. 记一笔不再发分（2026-11-02 之后取消） */
  s=await get(a.cookie);
@@ -124,16 +131,16 @@ async function put(cookie,rev,data){const r=await req('/api/state',{revision:rev
  s.data.entries.push({id:'e9',memberId:'me',date:'2026-11-03',start:'20:00',end:'20:30',minutes:30,content:'看',goalId:'g9',categoryId:'none',visibility:'shared'});
  assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
  s=await get(a.cookie);
- assert.equal(balance(s.data,'me','ours'),1,'还没加入的共同约定不计分');
+ assert.equal(poolOurs(s.data),2,'还没加入的共同约定不计分');
  s.data.goals.find(g=>g.id==='g9').joined=true;
  assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
  s=await get(a.cookie);
- assert.equal(balance(s.data,'me','ours'),1,'加入本身不发分，之前做的也不补');
+ assert.equal(poolOurs(s.data),2,'加入本身不发分，之前做的也不补');
  s.data.entries.push({id:'e10',memberId:'me',date:'2026-11-03',start:'21:00',end:'21:30',minutes:30,content:'看',goalId:'g9',categoryId:'none',visibility:'shared'});
  assert.equal((await put(a.cookie,s.revision,s.data)).status,200);
  s=await get(a.cookie);
- assert.equal(balance(s.data,'me','ours'),5,'加入后做到才算，4 分');
+ assert.equal(poolOurs(s.data),6,'加入后做到才算，4 分');
  assert.equal(balance(s.data,'me','mine'),8,'周保底不重复给，一周只加一次');
 
- console.log('PASS: two wallets, shared goals, half payment, both confirm, entries earn nothing');
+ console.log('PASS: one shared pool plus personal wallets, shared goals, both confirm, entries earn nothing');
 }finally{proc.kill();setTimeout(()=>fs.rmSync(dir,{recursive:true,force:true}),500)}})().catch(e=>{console.error(e);process.exitCode=1});
