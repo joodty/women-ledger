@@ -908,6 +908,35 @@ svg {
   background: var(--green-soft);
   color: #5f8f58;
 }
+/* 一起页约定行末尾那个「＋」：看得见进度，也要能当场记一次 */
+.goal-plus {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex: none;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--pink-soft-2);
+  color: var(--pink-deep);
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.goal-plus:active {
+  background: var(--pink-soft);
+}
+.goal-plus:disabled {
+  background: var(--gray-soft);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--ink-4);
+}
+.goal-plus.undo {
+  color: var(--pink-ink);
+  box-shadow: inset 0 0 0 1px var(--pink);
+  font-size: 15px;
+}
 /* 兑换页：想做的事 + 进度 */
 .task-top {
   display: flex;
@@ -1482,6 +1511,19 @@ svg {
   font-size: 11.5px;
   color: var(--ink-3);
   margin-top: 1px;
+}
+/* 接龙的副标题会被换成对方那段开头，太长就把省略号用在这里，不要撑高整行 */
+.story-link .list-d {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.list-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e2566f;
+  flex: none;
 }
 .list-arrow {
   color: var(--ink-4);

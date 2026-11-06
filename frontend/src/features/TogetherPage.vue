@@ -2,6 +2,8 @@
 import { computed, ref } from "vue";
 import { useSpace } from "../stores/space";
 import { useTask } from "../lib/task";
+import { useGoalCheckin } from "../lib/checkin";
+import { useStoryTurn } from "../lib/story";
 import type { Slot } from "../models";
 import PageHead from "../components/PageHead.vue";
 import CoupleStatus from "../components/CoupleStatus.vue";
@@ -9,7 +11,18 @@ import HistoryTimeline from "../components/HistoryTimeline.vue";
 import MemberAvatar from "../components/MemberAvatar.vue";
 import Icon from "../components/Icon.vue";
 const s = useSpace(),
-  task = useTask();
+  task = useTask(),
+  { justLogged, log: logOne, undo: undoOne } = useGoalCheckin(),
+  { last: lastStory, unread: storyFresh } = useStoryTurn();
+/* 故事接龙那行的副标题：对方刚写了就换成他那段开头几个字，否则还是原来那句。
+   取 18 个字是因为 390 宽下一行只放得下这些，超出会被省略。 */
+const STORY_IDLE = "一人接一段，慢慢写完一个故事";
+const storyPeek = computed(() => {
+  const t = lastStory.value;
+  if (!t || !storyFresh.value) return STORY_IDLE;
+  const head = t.text.replace(/\s+/g, " ").trim();
+  return `${s.member(t.memberId).name}：${head.length > 18 ? head.slice(0, 18) + "…" : head}`;
+});
 const goals = computed(() =>
   s.data.goals.filter((g) => g.scope === "both" && g.status === "active"),
 );
@@ -41,10 +54,10 @@ const doneTotal = computed(() =>
     <PageHead title="一起" subtitle="把想做的事慢慢实现" /><CoupleStatus />
     <section class="card">
       <div class="card-title">
-        我们的约定<span class="sub">做到了就攒分</span
+        我们的约定<span class="sub">做了就记上</span
         ><RouterLink class="card-link" to="/goals"
-          >管理<Icon name="right" :size="12"
-        /></RouterLink>
+          >管理<Icon name="right" :size="12" /></RouterLink
+        >
       </div>
       <div v-for="g in goals" :key="g.id" class="wish-item">
         <span
@@ -70,6 +83,22 @@ const doneTotal = computed(() =>
           "
         >
           加入
+        </button
+        ><button
+          v-if="justLogged[g.id]"
+          class="goal-plus undo"
+          :aria-label="'撤销刚才记的：' + g.name"
+          @click="undoOne(g)"
+        >
+          ↺</button
+        ><button
+          v-else-if="g.joined !== false"
+          class="goal-plus"
+          :disabled="s.reached(g)"
+          :aria-label="(g.kind === 'once' ? '完成：' : '记一次：') + g.name"
+          @click="logOne(g)"
+        >
+          ＋
         </button>
       </div>
       <div v-if="!goals.length" class="empty">
@@ -111,7 +140,13 @@ const doneTotal = computed(() =>
       ><span class="list-ico"><Icon name="speech" :size="19" /></span
       ><span class="list-main"
         ><span class="list-k">我们的故事接龙</span
-        ><span class="list-d">一人接一段，慢慢写完一个故事</span></span
+        ><span class="list-d">{{ storyPeek }}</span></span
+      ><span
+        v-if="storyFresh"
+        class="list-dot"
+        role="img"
+        aria-label="对方写了新的一段"
+      ></span
       ><Icon name="right" :size="16"
     /></RouterLink>
     <p class="v2-error" role="alert">{{ task.error.value }}</p>

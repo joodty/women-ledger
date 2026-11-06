@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useSpace } from "../stores/space";
 import { useDraft } from "../lib/draft";
 import { useTask } from "../lib/task";
+import { useStoryTurn } from "../lib/story";
 import PageHead from "../components/PageHead.vue";
 import Icon from "../components/Icon.vue";
 import { useSpeech } from "./speech/useSpeech";
@@ -18,7 +19,7 @@ const { draft, warning, clear } = useDraft(
 const stories = computed(() =>
     s.data.story_entries.slice().sort((a, b) => a.seq - b.seq),
   ),
-  last = computed(() => stories.value.at(-1));
+  { last, yourTurn } = useStoryTurn();
 const speech = useSpeech((text) => {
   if (draft.value.text.length + text.length <= 10000) draft.value.text += text;
   else extra.value = text;
@@ -59,7 +60,9 @@ function spark() {
         </div>
         <div class="prev-body v2-wrap">{{ last.text }}</div>
       </section>
-      <div class="turn-badge"><Icon name="heart" :size="13" />轮到你续写啦</div>
+      <div v-if="yourTurn" class="turn-badge">
+        <Icon name="heart" :size="13" />轮到你续写啦
+      </div>
       <form @submit.prevent="publish">
         <section class="write-card">
           <textarea

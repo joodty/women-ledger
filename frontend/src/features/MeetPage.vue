@@ -126,10 +126,10 @@ function removeItem(item: HistoryItem) {
           </div>
           <Icon name="heart" :size="28" />
         </section>
-        <button class="add-block" @click="edit(next)">
-          <Icon name="calendar" :size="16" />{{
-            next ? "修改下次见面" : "安排下一次见面"
-          }}
+        <!-- 行程卡里每一条本来就有铅笔，而下一次见面就是其中一条，
+             所以这个大按钮只在从没定过见面时才需要出现 -->
+        <button v-if="!next" class="add-block" @click="edit()">
+          <Icon name="calendar" :size="16" />安排第一次见面
         </button>
         <section class="card">
           <div class="card-title">
