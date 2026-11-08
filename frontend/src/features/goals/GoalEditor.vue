@@ -124,7 +124,7 @@ function remove() {
           {{
             f.kind === "once"
               ? "做完就结束，可以归档。"
-              : "每周做到几次，记一次算一次。"
+              : "每周做到几次，打一次卡算一次。"
           }}
         </div>
       </div>
@@ -145,7 +145,7 @@ function remove() {
           }}</span>
         </div>
         <div class="chip-hint">
-          点约定上的「记一次」，或记一笔时选中它，都会计入本周进度。
+          点约定上的「打卡」，或记一笔时选中它，都会计入本周进度。
         </div>
       </div>
       <div class="field">

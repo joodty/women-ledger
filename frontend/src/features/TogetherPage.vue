@@ -23,8 +23,13 @@ const storyPeek = computed(() => {
   const head = t.text.replace(/\s+/g, " ").trim();
   return `${s.member(t.memberId).name}：${head.length > 18 ? head.slice(0, 18) + "…" : head}`;
 });
+/* 一次就完的约定打完卡会自动归档，但这一张先留在原地，好让她点「撤销」 */
 const goals = computed(() =>
-  s.data.goals.filter((g) => g.scope === "both" && g.status === "active"),
+  s.data.goals.filter(
+    (g) =>
+      g.scope === "both" &&
+      (g.status === "active" || !!justLogged.value[g.id]),
+  ),
 );
 /* 各自做到的：只收「本周已经到量」的个人约定，只留名字。
    没到量的不进列表、也不写「还差几次」—— 这里只报告做到的事，不是成绩单。
@@ -95,7 +100,7 @@ const doneTotal = computed(() =>
           v-else-if="g.joined !== false"
           class="goal-plus"
           :disabled="s.reached(g)"
-          :aria-label="(g.kind === 'once' ? '完成：' : '记一次：') + g.name"
+          :aria-label="(g.kind === 'once' ? '完成：' : '打卡：') + g.name"
           @click="logOne(g)"
         >
           ＋

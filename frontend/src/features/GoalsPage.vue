@@ -13,22 +13,30 @@ const s = useSpace(),
   editor = ref(false),
   editing = ref<Goal>(),
   shared = ref(false),
-  { justLogged, log: logGoal, undo: undoGoal } = useGoalCheckin(),
+  { justLogged, gained, log: logGoal, undo: undoGoal } = useGoalCheckin(),
   openAction = ref(""),
   archived = ref(false);
+/* 一次就完的约定打完卡会自动归档；刚打完的这一张先留在原地，好让她点「撤销」 */
 const visible = computed(() =>
   s.data.goals.filter(
     (g) =>
       (g.memberId === s.slot || g.scope === "both") &&
-      (archived.value ? g.status !== "active" : g.status === "active"),
+      (archived.value
+        ? g.status !== "active" && !justLogged.value[g.id]
+        : g.status === "active" || !!justLogged.value[g.id]),
   ),
 );
+/* 每组内部：还没做到的在前，本周已达标的沉到后面。归档口径不变，它们仍是同一条约定。 */
+const sunk = (g: Goal) =>
+  s.progress(g) >= (g.kind === "once" ? 1 : g.timesPerWeek || 1) ? 1 : 0;
+const ordered = (both: boolean) =>
+  visible.value
+    .filter((g) => (g.scope === "both") === both)
+    .slice()
+    .sort((a, b) => sunk(a) - sunk(b));
 const groups = computed(() => [
-  { title: "我的约定", items: visible.value.filter((g) => g.scope !== "both") },
-  {
-    title: "我们的约定",
-    items: visible.value.filter((g) => g.scope === "both"),
-  },
+  { title: "我的约定", items: ordered(false) },
+  { title: "我们的约定", items: ordered(true) },
 ]);
 function add(both = false) {
   editing.value = undefined;
@@ -45,7 +53,22 @@ function archive(g: Goal) {
         "goals",
         s.version("goals", g.id),
       );
+      /* 动作做完了就把「更多」收起来，不然它会一直开着 */
+      openAction.value = "";
     });
+}
+/* 归档不是终点：一次就完的约定会自己归档，想接着做就把它放回去。 */
+function restore(g: Goal) {
+  task.run(async () => {
+    await s.submit(
+      "goal.archive",
+      { id: g.id, status: "active" },
+      "放回正在进行",
+      "goals",
+      s.version("goals", g.id),
+    );
+    openAction.value = "";
+  });
 }
 function remove(g: Goal) {
   task.run(async () => {
@@ -65,7 +88,7 @@ function remove(g: Goal) {
     <div class="sub-wrap">
       <PageHead
         title="约定"
-        subtitle="定下的事，做到一次记一次，每次都有分。"
+        subtitle="定下的事，每做到一次打一次卡，每次都有分。"
         back
         ><span
           >{{ visible.filter((g) => g.scope !== "both").length }}/3</span
@@ -162,7 +185,10 @@ function remove(g: Goal) {
                       ? "已完成"
                       : "一次就完"
                     : `${s.progress(g)}/${g.timesPerWeek || 1}`
-              }}</span></span
+              }}</span
+            ><b v-if="justLogged[g.id] && gained[g.id]" class="goal-gain"
+              >· +{{ gained[g.id].points }} 分</b
+            ></span
             ><span class="goal-btns"
               ><button
                 v-if="g.joined === false && g.memberId !== s.slot && !archived"
@@ -190,16 +216,16 @@ function remove(g: Goal) {
                     ? '已完成：'
                     : g.kind === 'once'
                       ? '完成：'
-                      : '记一次：') + g.name
+                      : '打卡：') + g.name
                 "
                 @click="logGoal(g)"
               >
                 {{
                   s.reached(g)
-                    ? "已做到"
+                    ? "已完成"
                     : g.kind === "once"
                       ? "完成"
-                      : "记一次"
+                      : "打卡"
                 }}
               </button></span
             >
@@ -210,6 +236,12 @@ function remove(g: Goal) {
           >
             <button v-if="!archived" class="card-link" @click="archive(g)">
               结束并归档</button
+            ><button
+              v-else-if="g.kind !== 'once' || !s.progress(g)"
+              class="card-link"
+              @click="restore(g)"
+            >
+              放回正在进行</button
             ><button class="card-link danger-text" @click="remove(g)">
               删除
             </button>

@@ -87,7 +87,7 @@ const server = spawn(process.execPath, ["server.cjs"], {
       .toBe(true);
     /* 从约定上点一下就生成记录，不再弹表单；记录内容就是约定名 */
     await b
-      .getByRole("button", { name: "记一次：共同运动", exact: true })
+      .getByRole("button", { name: "打卡：共同运动", exact: true })
       .click();
     await expect
       .poll(async () => (await snapshot(b)).data.entries.length)

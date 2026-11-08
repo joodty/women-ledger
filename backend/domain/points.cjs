@@ -130,6 +130,22 @@ function reconcilePoints(before, after) {
     });
   }
   after.points_ledger = ledger;
+  /* 一次就完的约定：做到一次就自动归档，否则它会一直躺在「正在进行」里点不动。
+     每周要做的不能这么处理 —— 本周做满只是一周的事，下周还要重来。
+     只看这一次写入的增删，不看「有没有记录」：这样把它放回正在进行时不会被立刻再归档一遍。 */
+  for (const g of after.goals) {
+    if (g.kind !== "once" || g.deleted) continue;
+    const now = after.entries.some((e) => e.goalId === g.id && !e.deleted);
+    const was = before.entries.some((e) => e.goalId === g.id && !e.deleted);
+    if (now && !was && g.status === "active") {
+      g.status = "done";
+      g.autoDone = true;
+    } else if (was && !now && g.status === "done" && g.autoDone) {
+      /* 把那次打卡撤销掉了，就把它放回来，不然它会一直卡在归档里 */
+      g.status = "active";
+      g.autoDone = false;
+    }
+  }
   /* 共同分是一个不分你我的双人池，所以「够不够扣」按池子总额判断；
      个人分仍按各自的钱包判断。 */
   const fromOurs = (r) =>

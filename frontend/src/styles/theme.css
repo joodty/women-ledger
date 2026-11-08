@@ -3335,10 +3335,16 @@ button.member-nm:active {
   font-size: 11px;
   color: var(--ink-3);
 }
+/* 加到的分要看得见，否则打完卡像什么都没发生 */
+.goal-gain {
+  color: var(--pink-deep);
+  font-weight: 600;
+}
 .goal-undo {
   border: 0;
   background: none;
   padding: 0;
+  margin-left: 6px;
   font: inherit;
   color: var(--ink-3);
   text-decoration: underline;

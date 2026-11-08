@@ -305,7 +305,7 @@ function config() {
       .filter({ has: a.locator(".goal-name").filter({ hasText: goalName }) });
     await ui("checkin: tap once", () =>
       goal
-        .getByRole("button", { name: "记一次：" + goalName, exact: true })
+        .getByRole("button", { name: "打卡：" + goalName, exact: true })
         .click(),
     );
     await waitRecord(a, checkinText);

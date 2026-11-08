@@ -67,12 +67,15 @@ module.exports = function ({
       const item = find("goals");
       own(item, slot);
       version("goals", item);
+      /* active 用来把归档过的约定放回「正在进行」 */
       fail(
-        ["done", "dropped"].includes(p.status),
+        ["active", "done", "dropped"].includes(p.status),
         "validation",
         "归档状态无效",
       );
       item.status = p.status;
+      /* 放回正在进行 ＝ 这是我自己决定的，别再被自动归档逻辑认领 */
+      if (p.status === "active") item.autoDone = false;
       break;
     }
     case "goal.delete": {

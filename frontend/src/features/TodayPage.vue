@@ -13,7 +13,7 @@ import TidySheet from "./records/TidySheet.vue";
 import { today, duration } from "../lib/date";
 import { monthDay, weekday } from "../lib/presentation";
 const s = useSpace(),
-  { justLogged, log: logOne, undo: undoOne } = useGoalCheckin(),
+  { justLogged, gained, log: logOne, undo: undoOne } = useGoalCheckin(),
   side = ref<Slot>(s.slot),
   editor = ref(false),
   editing = ref<Entry>(),
@@ -25,10 +25,12 @@ const rows = computed(() =>
     .slice()
     .sort((a, b) => a.start.localeCompare(b.start)),
 );
+/* 一次就完的约定打完卡会自动归档，但这一次仍留在这儿 —— 万一按错了还得能撤销 */
 const goals = computed(() =>
   s.data.goals.filter(
     (g) =>
-      g.status === "active" && (g.memberId === s.slot || g.scope === "both"),
+      (g.status === "active" || !!justLogged.value[g.id]) &&
+      (g.memberId === s.slot || g.scope === "both"),
   ),
 );
 /* 到没到量：一次就完看有没有做过一次，每周要做看本周次数够不够 */
@@ -90,8 +92,11 @@ function edit(e: Entry) {
       >
         <span class="prog-main"
           ><span class="prog-name">{{ g.name }}</span
-          ><span v-if="justLogged[g.id]" class="goal-just"
-            >刚刚记了一次 ·
+          ><span v-if="justLogged[g.id] && gained[g.id]" class="goal-just"
+            ><b class="goal-gain">+{{ gained[g.id].points }} 分</b
+            ><template v-if="gained[g.id].floor"
+              > · 本周保底 +{{ gained[g.id].floor }}</template
+            >
             <button class="goal-undo" @click="undoOne(g)">撤销</button></span
           ></span
         ><span v-if="g.scope === 'both'" class="task-who">我们的</span
@@ -110,14 +115,14 @@ function edit(e: Entry) {
           disabled
           :aria-label="'已完成：' + g.name"
         >
-          已做到</button
+          已完成</button
         ><button
           v-else-if="g.joined !== false"
           class="goal-do"
-          :aria-label="(g.kind === 'once' ? '完成：' : '记一次：') + g.name"
+          :aria-label="(g.kind === 'once' ? '完成：' : '打卡：') + g.name"
           @click="logOne(g)"
         >
-          {{ g.kind === "once" ? "完成" : "记一次" }}
+          {{ g.kind === "once" ? "完成" : "打卡" }}
         </button>
       </div>
       <RouterLink v-if="restGoals" class="goal-fold" to="/goals"
