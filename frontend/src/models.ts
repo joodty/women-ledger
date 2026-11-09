@@ -117,7 +117,8 @@ export interface WakeAlarm {
   date: string;
   time: string;
   days: number[];
-  tone: "gentle" | "bright" | "rising";
+  tone: "gentle" | "bright" | "rising" | "custom";
+  clipId?: string;
   note: string;
   enabled: boolean;
 }

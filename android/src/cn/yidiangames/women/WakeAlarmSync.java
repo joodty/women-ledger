@@ -70,9 +70,20 @@ public final class WakeAlarmSync extends JobService {
             if (cookie == null || cookie.isEmpty()) return;
             JSONObject result = request(cookie, null);
             if (result == null) return;
+            org.json.JSONArray alarms = result.getJSONArray("alarms");
+            for (int i = 0; i < alarms.length(); i++) {
+                JSONObject alarm = alarms.getJSONObject(i);
+                if (alarm.optBoolean("enabled") && !alarm.optString("clipId").isEmpty()) {
+                    try { WakeAlarmAudio.fetch(c, alarm.getString("clipId"), cookie); }
+                    catch (Exception ignored) { /* Keep the previous local alarm and retry later. */ }
+                }
+            }
             JSONObject receipt;
             synchronized (WakeAlarms.class) {
-                if (!cookie.equals(CookieManager.getInstance().getCookie(ORIGIN + "/"))) return;
+                if (!cookie.equals(CookieManager.getInstance().getCookie(ORIGIN + "/"))) {
+                    WakeAlarms.pruneAudio(c);
+                    return;
+                }
                 receipt = WakeAlarms.apply(c, result);
             }
             request(cookie, receipt);
@@ -88,6 +99,7 @@ public final class WakeAlarmSync extends JobService {
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(8000);
             conn.setRequestProperty("Cookie", cookie);
+            conn.setRequestProperty("X-Women-Wake-Audio", "1");
             if (body != null) {
                 conn.setRequestMethod("POST");
                 conn.setDoOutput(true);

@@ -27,10 +27,12 @@ function sameOrigin(req) {
     return false;
   }
 }
-function getBody(req, limit = 2 * 1024 * 1024) {
+function getBytes(req, limit) {
   return new Promise((resolve, reject) => {
     let size = 0,
       chunks = [];
+    req.on("error", reject);
+    req.on("aborted", () => reject(Error("请求已中断")));
     req.on("data", (chunk) => {
       size += chunk.length;
       if (size > limit) {
@@ -39,13 +41,17 @@ function getBody(req, limit = 2 * 1024 * 1024) {
       } else chunks.push(chunk);
     });
     req.on("end", () => {
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-      } catch {
-        reject(Error("无效 JSON"));
-      }
+      resolve(Buffer.concat(chunks));
     });
     req.on("error", reject);
   });
 }
-module.exports = { send, cookie, sameOrigin, getBody };
+async function getBody(req, limit = 2 * 1024 * 1024) {
+  try {
+    return JSON.parse((await getBytes(req, limit)).toString("utf8"));
+  } catch (e) {
+    if (e instanceof SyntaxError) throw Error("无效 JSON");
+    throw e;
+  }
+}
+module.exports = { send, cookie, sameOrigin, getBody, getBytes };

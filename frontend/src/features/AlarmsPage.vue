@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
 import { useSpace } from "../stores/space";
 import { useTask } from "../lib/task";
 import { requestReminders, wakeAlarmNative } from "../lib/native";
@@ -8,6 +8,7 @@ import PageHead from "../components/PageHead.vue";
 import Modal from "../components/Modal.vue";
 import Icon from "../components/Icon.vue";
 import type { WakeAlarm } from "../models";
+import { audioUrl, decodeSong, makeClip, uploadClip } from "./alarmAudio";
 import gentle from "../../../android/res/raw/wake_gentle.wav?url";
 import bright from "../../../android/res/raw/wake_bright.wav?url";
 import rising from "../../../android/res/raw/wake_rising.wav?url";
@@ -28,15 +29,28 @@ const version = ref<number>();
 const repeat = ref(false);
 function defaults() {
   return { date: shift(today(), 1), time: "07:30", days: [] as number[],
-    tone: "gentle" as WakeAlarm["tone"], note: "" };
+    tone: "gentle" as WakeAlarm["tone"], clipId: "", note: "" };
 }
 const form = ref(defaults());
 let player: HTMLAudioElement | undefined;
-function close() {
+let previewUrl = "";
+const song = shallowRef<AudioBuffer>();
+const songName = ref("");
+const start = ref(0);
+const length = ref(30);
+const available = computed(() => Math.max(0, Math.floor((song.value?.duration || 0) - start.value)));
+function stopPreview() {
   player?.pause();
+  player = undefined;
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = "";
+}
+function close() {
+  stopPreview();
+  song.value = undefined;
   editing.value = false;
 }
-onBeforeUnmount(() => player?.pause());
+onBeforeUnmount(stopPreview);
 
 function edit(alarm?: WakeAlarm) {
   existing.value = alarm?.id;
@@ -45,9 +59,10 @@ function edit(alarm?: WakeAlarm) {
   repeat.value = !!alarm?.days.length;
   form.value = alarm ? {
     date: alarm.date || shift(today(), 1), time: alarm.time, days: [...alarm.days],
-    tone: alarm.tone, note: alarm.note,
+    tone: alarm.tone, clipId: alarm.clipId || "", note: alarm.note,
   } : defaults();
   task.error.value = "";
+  songName.value = "";
   editing.value = true;
 }
 
@@ -59,7 +74,8 @@ function state(alarm: WakeAlarm) {
   const receipt = s.alarmReceipts[alarm.id];
   const applied = receipt && receipt.version === s.version("wake_alarms", alarm.id);
   if (!applied) {
-    const pending = alarm.enabled ? "待手机同步" : "暂停待同步";
+    const pending = !alarm.enabled ? "暂停待同步" :
+      alarm.clipId ? "自定义铃声待手机同步" : "待手机同步";
     return receipt?.status === "scheduled" && receipt.nextAt > Date.now()
       ? pending + " · 旧时间 " + dateTime(receipt.nextAt) + " 仍可能响" : pending;
   }
@@ -83,8 +99,14 @@ function save() {
     if (repeat.value && !form.value.days.length) throw Error("请选择至少一个星期");
     if (!repeat.value && Date.parse(form.value.date + "T" + form.value.time + ":00+08:00") <= Date.now())
       throw Error("请选择将来的时间");
+    let clipId = form.value.clipId;
+    if (form.value.tone === "custom" && song.value) {
+      const clip = await makeClip(song.value, start.value, length.value);
+      clipId = (await uploadClip(clip)).clipId;
+    }
+    if (form.value.tone === "custom" && !clipId) throw Error("请先选择一首歌");
     const saved = await commit(existing.value ? "alarm.update" : "alarm.create",
-      { ...form.value, id: draftId.value, days: repeat.value ? form.value.days : [] },
+      { ...form.value, clipId, id: draftId.value, days: repeat.value ? form.value.days : [] },
       version.value);
     close();
     if (saved) s.notice = "已保存，等待对方手机同步";
@@ -106,11 +128,38 @@ function removable(alarm: WakeAlarm) {
   return receipt?.version === s.version("wake_alarms", alarm.id) &&
     ["paused", "expired"].includes(receipt?.status || "");
 }
-async function preview() {
-  player?.pause();
-  player = new Audio(tones.find((t) => t.id === form.value.tone)!.url);
-  try { await player.play(); }
-  catch { task.error.value = "暂时无法试听铃声"; }
+function chooseSong(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  task.run(async () => {
+    stopPreview();
+    const decoded = await decodeSong(file);
+    if (decoded.duration < 1) throw Error("请选择至少 1 秒的音频");
+    if (!editing.value) return;
+    song.value = decoded;
+    songName.value = file.name;
+    start.value = 0;
+    length.value = Math.min(30, Math.floor(decoded.duration));
+  });
+}
+function preview() {
+  task.run(async () => {
+    stopPreview();
+    let url = tones.find((t) => t.id === form.value.tone)?.url;
+    if (form.value.tone === "custom") {
+      if (song.value) {
+        previewUrl = URL.createObjectURL(await makeClip(song.value, start.value, length.value));
+        url = previewUrl;
+      } else if (form.value.clipId) url = audioUrl(form.value.clipId);
+    }
+    if (!url) throw Error("请先选择一首歌");
+    if (!editing.value) { stopPreview(); return; }
+    player = new Audio(url);
+    try { await player.play(); }
+    catch { throw Error("暂时无法试听铃声"); }
+  });
 }
 </script>
 <template>
@@ -162,11 +211,28 @@ async function preview() {
             </div>
           </fieldset>
           <label class="field"><span class="field-k">铃声</span>
-            <select v-model="form.tone" class="input-box" @change="player?.pause()">
+            <select v-model="form.tone" aria-label="铃声" class="input-box" @change="stopPreview">
               <option v-for="tone in tones" :key="tone.id" :value="tone.id">{{ tone.label }}</option>
+              <option value="custom">自选歌曲</option>
             </select>
           </label>
-          <button type="button" class="btn-ghost" @click="preview">试听铃声</button>
+          <template v-if="form.tone === 'custom'">
+            <label class="field"><span class="field-k">选择歌曲（20 MB 以内）</span>
+              <input class="input-box" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" :disabled="task.busy.value" @change="chooseSong" />
+            </label>
+            <p v-if="songName" class="muted v2-wrap">{{ songName }}</p>
+            <p v-else-if="form.clipId" class="muted">已保留上次选的铃声</p>
+            <div v-if="song" class="wake-days">
+              <label class="field"><span class="field-k">从第几秒开始</span>
+                <input v-model.number="start" class="input-box" type="number" min="0" :max="Math.floor(song.duration - 1)" step="1" required @input="stopPreview(); length = Math.min(length, available)" />
+              </label>
+              <label class="field"><span class="field-k">片段秒数（最多 60 秒）</span>
+                <input v-model.number="length" class="input-box" type="number" min="1" :max="Math.min(60, available)" step="1" required @input="stopPreview" />
+              </label>
+            </div>
+            <p class="muted">对方需更新安卓 App。手机自动下载选中的片段，设好后离线也能响。</p>
+          </template>
+          <button type="button" class="btn-ghost" :disabled="task.busy.value" @click="preview">试听铃声</button>
           <label class="field"><span class="field-k">早安留言（可选，响铃时显示）</span>
             <input v-model="form.note" class="input-box" maxlength="200" placeholder="早呀，今天也要开心" />
           </label>

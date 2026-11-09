@@ -45,16 +45,27 @@ public final class WakeAlarmRing extends Service {
         player = null;
         try {
             String tone = intent.getStringExtra("tone");
-            int res = getResources().getIdentifier("wake_" + tone, "raw", getPackageName());
             AudioAttributes attributes = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
-            player = MediaPlayer.create(this, res, attributes, 0);
+            String clip = intent.getStringExtra("clipId");
+            if ("custom".equals(tone) && WakeAlarmAudio.cached(this, clip)) {
+                player = new MediaPlayer();
+                player.setAudioAttributes(attributes);
+                try (java.io.FileInputStream audio = new java.io.FileInputStream(WakeAlarmAudio.file(this, clip))) {
+                    player.setDataSource(audio.getFD());
+                    player.prepare();
+                }
+            } else {
+                int res = getResources().getIdentifier("wake_" + tone, "raw", getPackageName());
+                player = MediaPlayer.create(this, res == 0 ? getResources().getIdentifier(
+                    "wake_gentle", "raw", getPackageName()) : res, attributes, 0);
+            }
             if (player != null) {
                 player.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
                 player.setLooping(true);
                 player.start();
             }
-        } catch (RuntimeException ignored) { }
+        } catch (java.io.IOException | RuntimeException ignored) { }
         handler.removeCallbacksAndMessages(null);
         handler.postDelayed(this::stopSelf, 120000);
         return START_NOT_STICKY;

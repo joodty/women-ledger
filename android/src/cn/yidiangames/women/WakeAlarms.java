@@ -17,6 +17,8 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Iterator;
+import java.util.HashSet;
+import java.util.Set;
 
 public final class WakeAlarms extends BroadcastReceiver {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
@@ -101,7 +103,7 @@ public final class WakeAlarms extends BroadcastReceiver {
         String account = response.getString("account");
         String space = response.getString("spaceId");
         if (!account.equals(prefs(c).getString("account", "")) ||
-            !space.equals(prefs(c).getString("space", ""))) clear(c);
+            !space.equals(prefs(c).getString("space", ""))) clearSchedules(c);
         JSONObject before = saved(c), after = new JSONObject();
         JSONArray items = new JSONArray();
         JSONArray alarms = response.getJSONArray("alarms");
@@ -110,6 +112,11 @@ public final class WakeAlarms extends BroadcastReceiver {
             String id = alarm.getString("id");
             if (!id.matches("[a-zA-Z0-9_-]{1,100}")) continue;
             JSONObject previous = before.optJSONObject(id);
+            if (alarm.optBoolean("enabled") && !alarm.optString("clipId").isEmpty() &&
+                !WakeAlarmAudio.cached(c, alarm.getString("clipId"))) {
+                if (previous != null) after.put(id, previous);
+                continue;
+            }
             long at = previous == null ? 0 : previous.optLong("nextAt");
             long now = System.currentTimeMillis();
             if (alarm.optBoolean("enabled") && previous != null &&
@@ -133,13 +140,29 @@ public final class WakeAlarms extends BroadcastReceiver {
             for (Iterator<String> it = after.keys(); it.hasNext();) cancel(c, it.next());
             throw new java.io.IOException("Could not save wake alarms");
         }
+        pruneAudio(c);
         return new JSONObject().put("account", account).put("spaceId", space).put("items", items);
     }
 
     static synchronized void clear(Context c) {
+        clearSchedules(c);
+        pruneAudio(c);
+    }
+
+    private static void clearSchedules(Context c) {
         for (Iterator<String> it = saved(c).keys(); it.hasNext();) cancel(c, it.next());
         prefs(c).edit().clear().commit();
         c.stopService(new Intent(c, WakeAlarmRing.class));
+    }
+
+    static void pruneAudio(Context c) {
+        JSONObject alarms = saved(c);
+        Set<String> keep = new HashSet<>();
+        for (Iterator<String> it = alarms.keys(); it.hasNext();) {
+            JSONObject alarm = alarms.optJSONObject(it.next());
+            if (alarm != null && alarm.optBoolean("enabled")) keep.add(alarm.optString("clipId"));
+        }
+        WakeAlarmAudio.prune(c, keep);
     }
 
     static synchronized void restore(Context c) {
@@ -161,7 +184,8 @@ public final class WakeAlarms extends BroadcastReceiver {
                 schedule(c, alarm);
                 prefs(c).edit().putString("items", alarms.toString()).commit();
                 if (now - at < 180000) c.startForegroundService(new Intent(c, WakeAlarmRing.class)
-                    .putExtra("note", alarm.optString("note")).putExtra("tone", alarm.optString("tone")));
+                    .putExtra("note", alarm.optString("note")).putExtra("tone", alarm.optString("tone"))
+                    .putExtra("clipId", alarm.optString("clipId")));
             } catch (Exception ignored) { }
         }
     }

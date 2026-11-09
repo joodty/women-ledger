@@ -138,6 +138,7 @@ function mergeValue(base, local, remote) {
 }
 function visibleState(data, slot) {
   const result = structuredClone(data);
+  for (const alarm of result.wake_alarms || []) delete alarm.legacy;
   for (const key of ["goals", "wishlist"])
     result[key] = result[key].filter((x) => !x.deleted);
   const hiddenGoals = new Set(
