@@ -246,13 +246,12 @@ function remove(g: Goal) {
               "
             >
               加入</button
-            ><template v-else-if="cta(g) === 'today'"
-              ><span class="btn-mini done-today"
-                ><Icon name="check" :size="11" />已打卡</span
-              ></template
+            ><span v-else-if="cta(g) === 'today'" class="btn-check on"
+              >已打卡</span
             ><button
               v-else-if="cta(g) === 'done' || cta(g) === 'log'"
-              class="btn-mini"
+              class="btn-check"
+              :class="{ off: cta(g) === 'done' }"
               :disabled="cta(g) === 'done'"
               :aria-label="
                 (cta(g) === 'done'

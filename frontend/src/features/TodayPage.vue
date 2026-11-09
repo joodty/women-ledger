@@ -36,6 +36,11 @@ const goals = computed(() =>
 /* 到没到量：一次就完看有没有做过一次，每周要做看本周次数够不够 */
 const target = (g: Goal) => (g.kind === "once" ? 1 : g.timesPerWeek || 1);
 const reached = (g: Goal) => s.progress(g) >= target(g);
+/* 今天为这个约定打过卡没有 —— 一天只打一次，打过就换成「已打卡」 */
+const todayDone = (g: Goal) =>
+  s.data.entries.some(
+    (e) => e.goalId === g.id && e.memberId === s.slot && e.date === today(),
+  );
 /* 没做到的排前面，做过的沉到底部；不隐藏任何一条，超出三行的折成一行字 */
 const goalsSorted = computed(() =>
   goals.value
@@ -111,14 +116,18 @@ function edit(e: Entry) {
         }}</span
         ><button
           v-if="reached(g) && g.joined !== false"
-          class="goal-do done"
+          class="btn-check off"
           disabled
           :aria-label="'已完成：' + g.name"
         >
           已完成</button
+        ><span
+          v-else-if="todayDone(g) && g.joined !== false"
+          class="btn-check on"
+          >已打卡</span
         ><button
           v-else-if="g.joined !== false"
-          class="goal-do"
+          class="btn-check"
           :aria-label="(g.kind === 'once' ? '完成：' : '打卡：') + g.name"
           @click="logOne(g)"
         >

@@ -958,35 +958,6 @@ svg {
   background: var(--green-soft);
   color: #5f8f58;
 }
-/* 一起页约定行末尾那个「＋」：看得见进度，也要能当场记一次 */
-.goal-plus {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  flex: none;
-  border-radius: 11px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px var(--pink-soft-2);
-  color: var(--pink-deep);
-  font-size: 16px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.goal-plus:active {
-  background: var(--pink-soft);
-}
-.goal-plus:disabled {
-  background: var(--gray-soft);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--ink-4);
-}
-.goal-plus.undo {
-  color: var(--pink-ink);
-  box-shadow: inset 0 0 0 1px var(--pink);
-  font-size: 15px;
-}
 /* 兑换页：想做的事 + 进度 */
 .task-top {
   display: flex;
@@ -1709,7 +1680,7 @@ svg {
    分类和分值原来是各占一整行的「设定」，每天都要看它太吵，压进第二行小字里 */
 .goal-card {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) 62px;
   grid-template-areas:
     "ico line acts"
     "ico meta cta";
@@ -1744,6 +1715,7 @@ svg {
   grid-area: acts;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 2px;
 }
 .goal-meta {
@@ -1788,6 +1760,7 @@ svg {
   grid-area: cta;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
 }
 /* 展开的「结束 / 删除」横跨整行，不然会被挤进 24px 的图标列里 */
@@ -1876,17 +1849,35 @@ svg {
   background: var(--gray-soft);
   color: var(--ink-2);
 }
-/* 今天这一下已经打过了：空心描边，和粉底实心的打卡键明确不是一个东西 ——
-   它不是「还能按」，是「已经发生」。一天只有一次，再按也没用 */
-.btn-mini.done-today {
-  background: transparent;
-  color: var(--ink-3);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  gap: 3px;
+/* 三个页面（今天 / 一起 / 约定）上的打卡键是同一个东西，只能有一套样子：
+   能打 = 粉底实心，今天打过了 = 浅绿，本周做够了 = 灰。
+   写死最小宽度，「打卡」两个字和「已打卡」三个字才一样宽，右边缘才对得齐 */
+.btn-check {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 5px 8px;
+  border: 1px solid var(--pink-soft-2);
+  border-radius: 14px;
+  background: var(--pink-soft);
+  color: var(--pink-ink);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
 }
-.btn-mini.done-today svg {
-  width: 11px;
-  height: 11px;
+.btn-check.on {
+  border-color: var(--green-soft);
+  background: var(--green-soft);
+  color: #5f8f58;
+}
+.btn-check.off {
+  border-color: transparent;
+  background: var(--gray-soft);
+  color: var(--ink-4);
 }
 .add-block {
   display: flex;
@@ -3418,23 +3409,6 @@ button.member-nm:active {
 }
 .goal-p.ok {
   color: var(--pink-deep);
-}
-/* 今天页：约定行末的「记一次」——点一下就地生成今天的记录，不弹表单 */
-.goal-do {
-  flex: 0 0 auto;
-  border: 1px solid var(--pink-soft-2);
-  background: var(--pink-soft);
-  color: var(--pink-deep);
-  font-family: inherit;
-  font-size: 11.5px;
-  line-height: 1.2;
-  padding: 5px 11px;
-  border-radius: 14px;
-}
-.goal-do.done {
-  border-color: var(--line);
-  background: none;
-  color: var(--ink-3);
 }
 .goal-just {
   display: block;

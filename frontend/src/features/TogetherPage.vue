@@ -4,7 +4,8 @@ import { useSpace } from "../stores/space";
 import { useTask } from "../lib/task";
 import { useGoalCheckin } from "../lib/checkin";
 import { useStoryTurn } from "../lib/story";
-import type { Slot } from "../models";
+import type { Goal, Slot } from "../models";
+import { today } from "../lib/date";
 import PageHead from "../components/PageHead.vue";
 import CoupleStatus from "../components/CoupleStatus.vue";
 import HistoryTimeline from "../components/HistoryTimeline.vue";
@@ -12,7 +13,7 @@ import MemberAvatar from "../components/MemberAvatar.vue";
 import Icon from "../components/Icon.vue";
 const s = useSpace(),
   task = useTask(),
-  { justLogged, log: logOne, undo: undoOne } = useGoalCheckin(),
+  { justLogged, log: logOne } = useGoalCheckin(),
   { last: lastStory, unread: storyFresh } = useStoryTurn();
 /* 故事接龙那行的副标题：对方刚写了就换成他那段开头几个字，否则还是原来那句。
    取 18 个字是因为 390 宽下一行只放得下这些，超出会被省略。 */
@@ -23,6 +24,12 @@ const storyPeek = computed(() => {
   const head = t.text.replace(/\s+/g, " ").trim();
   return `${s.member(t.memberId).name}：${head.length > 18 ? head.slice(0, 18) + "…" : head}`;
 });
+/* 今天为这个约定打过卡没有 —— 和今天页、约定页同一套判断，
+   一天只打一次，打过就换成「已打卡」 */
+const todayDone = (g: Goal) =>
+  s.data.entries.some(
+    (e) => e.goalId === g.id && e.memberId === s.slot && e.date === today(),
+  );
 /* 一次就完的约定打完卡会自动归档，但这一张先留在原地，好让她点「撤销」 */
 const goals = computed(() =>
   s.data.goals.filter(
@@ -68,7 +75,7 @@ const doneTotal = computed(() =>
         <span
           class="wish-ico"
           style="background: var(--pink-soft); color: var(--pink-deep)"
-          ><Icon name="check" :size="18" /></span
+          ><Icon name="rings" :size="18" /></span
         ><span class="wish-main"
           ><span class="task-top"
             ><span class="wish-name">{{ g.name }}</span
@@ -88,22 +95,23 @@ const doneTotal = computed(() =>
           "
         >
           加入
-        </button
-        ><button
-          v-if="justLogged[g.id]"
-          class="goal-plus undo"
-          :aria-label="'撤销刚才记的：' + g.name"
-          @click="undoOne(g)"
+        </button>
+        <button
+          v-else-if="s.reached(g) && g.joined !== false"
+          class="btn-check off"
+          disabled
+          :aria-label="'已完成：' + g.name"
         >
-          ↺</button
+          已完成</button
+        ><span v-else-if="todayDone(g) && g.joined !== false" class="btn-check on"
+          >已打卡</span
         ><button
           v-else-if="g.joined !== false"
-          class="goal-plus"
-          :disabled="s.reached(g)"
+          class="btn-check"
           :aria-label="(g.kind === 'once' ? '完成：' : '打卡：') + g.name"
           @click="logOne(g)"
         >
-          ＋
+          打卡
         </button>
       </div>
       <div v-if="!goals.length" class="empty">
