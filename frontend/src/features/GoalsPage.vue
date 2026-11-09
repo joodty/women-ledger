@@ -46,11 +46,11 @@ const catOf = (g: Goal) =>
   s.data.categories.find((c) => c.id === g.categoryId);
 const catName = (g: Goal) => catOf(g)?.name || "未分类";
 const catColor = (g: Goal) => catOf(g)?.color || "var(--ink-3)";
-/* 一周要做二十次的约定，点排下来会溢出。超过十个就不画点，只留数字 ——
-   挤成一排的小点看不出数，反而像是装饰 */
+/* 一周要做七八次的约定，点会顶到卡片外面去被切掉（实机截图里就是这样）。
+   超过五个就不画点，只留数字 —— 旁边那个 0/7 已经把话说清楚了 */
 const dots = (g: Goal) => {
   const n = g.timesPerWeek || 1;
-  return n > 10 ? 0 : n;
+  return n > 5 ? 0 : n;
 };
 function add(both = false) {
   editing.value = undefined;
