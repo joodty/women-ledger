@@ -33,6 +33,16 @@ function date(value) {
 function own(item, slot) {
   fail(item && item.memberId === slot, "forbidden", "只能修改自己的内容", 403);
 }
+/* 共同的约定是两个人的：谁建的都能改能删，不然谁先建谁说了算。
+   个人的仍然只归自己。 */
+function ownOrShared(item, slot) {
+  fail(
+    item && (item.memberId === slot || item.scope === "both"),
+    "forbidden",
+    "只能修改自己的内容",
+    403,
+  );
+}
 function visibility(v) {
   fail(["private", "shared"].includes(v), "validation", "请选择可见范围");
   return v;
@@ -72,4 +82,13 @@ function goalFields(p) {
   };
 }
 
-module.exports = { today, text, id, date, own, visibility, goalFields };
+module.exports = {
+  today,
+  text,
+  id,
+  date,
+  own,
+  ownOrShared,
+  visibility,
+  goalFields,
+};

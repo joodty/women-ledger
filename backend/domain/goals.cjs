@@ -5,7 +5,7 @@ const {
   text,
   id,
   date,
-  own,
+  ownOrShared,
   visibility,
   goalFields,
 } = require("./validation.cjs");
@@ -45,9 +45,12 @@ module.exports = function ({
     }
     case "goal.update": {
       const item = find("goals");
-      own(item, slot);
+      ownOrShared(item, slot);
       version("goals", item);
-      Object.assign(item, goalFields(p));
+      const fields = goalFields(p);
+      /* 共同的约定谁都能改，但改的只能是内容 —— 不能把两个人一起做的事改成只剩一个人 */
+      if (item.memberId !== slot) fields.scope = "both";
+      Object.assign(item, fields);
       break;
     }
     case "goal.join": {
@@ -65,7 +68,7 @@ module.exports = function ({
     }
     case "goal.archive": {
       const item = find("goals");
-      own(item, slot);
+      ownOrShared(item, slot);
       version("goals", item);
       /* active 用来把归档过的约定放回「正在进行」 */
       fail(
@@ -80,7 +83,7 @@ module.exports = function ({
     }
     case "goal.delete": {
       const item = find("goals");
-      own(item, slot);
+      ownOrShared(item, slot);
       version("goals", item);
       // Keep the goal behind existing check-ins so deletion cannot erase earned points.
       item.deleted = true;

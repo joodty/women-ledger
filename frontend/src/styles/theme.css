@@ -1684,12 +1684,30 @@ svg {
   width: 20px;
   height: 20px;
 }
+.goal-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
 .goal-name {
   font-family: var(--serif);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.6px;
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 他建的那条：让人知道删了对方那边也会没 */
+.goal-by {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--ink-4);
+  letter-spacing: 0.2px;
 }
 .goal-edit {
   color: var(--ink-4);

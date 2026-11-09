@@ -16,6 +16,8 @@ const s = useSpace(),
   { justLogged, gained, log: logGoal, undo: undoGoal } = useGoalCheckin(),
   openAction = ref(""),
   archived = ref(false);
+/* 共同的约定两个人都能改能删 —— 谁先建的不该决定谁说了算；个人的仍只归自己 */
+const canEdit = (g: Goal) => g.memberId === s.slot || g.scope === "both";
 /* 一次就完的约定打完卡会自动归档；刚打完的这一张先留在原地，好让她点「撤销」 */
 const visible = computed(() =>
   s.data.goals.filter(
@@ -128,9 +130,13 @@ function remove(g: Goal) {
         >
           <div class="goal-head">
             <span class="goal-ico"><Icon name="target" :size="20" /></span
-            ><span class="goal-name">{{ g.name }}</span
+            ><span class="goal-title"
+              ><span class="goal-name">{{ g.name }}</span
+              ><span v-if="g.memberId !== s.slot" class="goal-by"
+                >{{ s.member(g.memberId).name }}建的</span
+              ></span
             ><button
-              v-if="g.memberId === s.slot"
+              v-if="canEdit(g)"
               class="goal-edit"
               :aria-label="'修改约定：' + g.name"
               @click="
@@ -140,7 +146,7 @@ function remove(g: Goal) {
             >
               <Icon name="edit" :size="17" /></button
             ><button
-              v-if="g.memberId === s.slot"
+              v-if="canEdit(g)"
               class="goal-dots"
               :aria-label="'更多操作：' + g.name"
               :aria-expanded="openAction === g.id"
@@ -230,10 +236,7 @@ function remove(g: Goal) {
               </button></span
             >
           </div>
-          <div
-            v-if="g.memberId === s.slot && openAction === g.id"
-            class="goal-more"
-          >
+          <div v-if="canEdit(g) && openAction === g.id" class="goal-more">
             <button v-if="!archived" class="card-link" @click="archive(g)">
               结束并归档</button
             ><button
