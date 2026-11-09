@@ -3466,14 +3466,22 @@ button.member-nm:active {
   text-decoration-color: var(--line-2);
 }
 /* 「加一个」是一行字，不要按钮感 */
+/* 「新增约定」和「加一个」是同一件事，就该长一样：粉底胶囊、同一个加号。
+   原来的「加一个」是纯文字，跟上面那个按钮看着不像一家的 */
 button.sum-go {
-  background: none;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   border: 0;
-  padding: 0;
+  padding: 4px 11px;
+  border-radius: 13px;
+  background: var(--pink-soft);
+  color: var(--pink-ink);
   font-size: 12px;
-  color: var(--ink-4);
+  letter-spacing: 0.2px;
   cursor: pointer;
 }
 button.sum-go:active {
-  color: var(--pink-deep);
+  background: var(--pink-soft-2);
 }
