@@ -1876,11 +1876,17 @@ svg {
   background: var(--gray-soft);
   color: var(--ink-2);
 }
-/* 撤销：白底粉边。默认的 .btn-mini 已经是粉底，两个都粉就分不出来了 */
-.btn-mini.undo {
-  background: #fff;
-  color: var(--pink-ink);
-  box-shadow: inset 0 0 0 1px var(--pink-soft-2);
+/* 今天这一下已经打过了：空心描边，和粉底实心的打卡键明确不是一个东西 ——
+   它不是「还能按」，是「已经发生」。一天只有一次，再按也没用 */
+.btn-mini.done-today {
+  background: transparent;
+  color: var(--ink-3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  gap: 3px;
+}
+.btn-mini.done-today svg {
+  width: 11px;
+  height: 11px;
 }
 .add-block {
   display: flex;
@@ -3436,11 +3442,11 @@ button.member-nm:active {
   font-size: 11px;
   color: var(--ink-3);
 }
-/* 加到的分要看得见，否则打完卡像什么都没发生 */
-.goal-gain {
-  color: var(--pink-deep);
-  font-size: 11px;
+/* 加到的分要看得见，否则打完卡像什么都没发生。
+   不另外加文字 —— 窄屏上第二行就那么宽，只能让 +2 自己亮一下 */
+.goal-pt.just {
   font-weight: 600;
+  color: var(--pink-ink);
 }
 .goal-undo {
   border: 0;
@@ -3464,6 +3470,20 @@ button.member-nm:active {
 .goal-card-done .goal-name {
   text-decoration: line-through;
   text-decoration-color: var(--line-2);
+}
+/* 已归档这一页整张都退后一层：灰底、没有投影、名字变灰划掉。
+   不用整体透明度 —— 那会把字一起糊掉，认不出是哪一条 */
+.goal-card-archived {
+  background: var(--gray-soft);
+  box-shadow: none;
+}
+.goal-card-archived .goal-name {
+  color: var(--ink-2);
+  text-decoration: line-through;
+  text-decoration-color: var(--line-2);
+}
+.goal-card-archived .goal-ico {
+  color: var(--ink-4);
 }
 /* 「加一个」是一行字，不要按钮感 */
 /* 「新增约定」和「加一个」是同一件事，就该长一样：粉底胶囊、同一个加号。

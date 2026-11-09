@@ -65,6 +65,19 @@ module.exports = function ({
           "validation",
           "这个一次性约定已经完成过了",
         );
+      /* 每天每个约定只打一次卡。打一次就是「今天做了」，再点一次不代表多做了，
+         只会凭空多一分。要改时长就去改那条记录，不是再打一次。 */
+      if (type === "record.create" && g && g.kind !== "once") {
+        const day = date(p.date || today());
+        fail(
+          !data.entries.some(
+            (e) =>
+              e.memberId === slot && e.goalId === g.id && e.date === day,
+          ),
+          "validation",
+          "今天已经为这个约定打过卡了",
+        );
+      }
       const entry = {
         ...(old || {}),
         id: id(p.id),

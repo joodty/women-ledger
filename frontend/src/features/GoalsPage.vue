@@ -7,13 +7,14 @@ import Icon from "../components/Icon.vue";
 import GoalEditor from "./goals/GoalEditor.vue";
 import { useGoalCheckin } from "../lib/checkin";
 import { confirmCommand } from "../lib/confirmCommand";
+import { today } from "../lib/date";
 import type { Goal } from "../models";
 const s = useSpace(),
   task = useTask(),
   editor = ref(false),
   editing = ref<Goal>(),
   shared = ref(false),
-  { justLogged, gained, log: logGoal, undo: undoGoal } = useGoalCheckin(),
+  { justLogged, gained, log: logGoal } = useGoalCheckin(),
   openAction = ref(""),
   archived = ref(false);
 /* 共同的约定两个人都能改能删 —— 谁先建的不该决定谁说了算；个人的仍只归自己 */
@@ -52,6 +53,36 @@ const dots = (g: Goal) => {
   const n = g.timesPerWeek || 1;
   return n > 5 ? 0 : n;
 };
+/* 今天为这个约定打过卡没有。服务端也拦着，这里只是让按钮提前把答案说出来，
+   不然她得点一下才发现打不进去 */
+const todayDone = (g: Goal) =>
+  s.data.entries.some(
+    (e) => e.goalId === g.id && e.memberId === s.slot && e.date === today(),
+  );
+/* 右边那格只放一件事，按这个顺序挑最重要的一件：
+   能不能加入 → 本周做够了没有 → 今天打过没有 → 可以打卡 */
+type Cta = "join" | "wait" | "done" | "today" | "log" | "none";
+const cta = (g: Goal): Cta => {
+  if (g.joined === false)
+    return g.memberId !== s.slot && !archived.value ? "join" : "wait";
+  if (archived.value) return "none";
+  if (s.reached(g)) return "done";
+  if (justLogged.value[g.id] || todayDone(g)) return "today";
+  return "log";
+};
+/* 撤销今天这一下：不占打卡键旁边的地方 —— 那格只有一个位置，
+   窄屏上「已打卡」加「撤销」会把第二行挤到看不见。
+   放进「更多」里，刷新之后也还能撤 */
+function undoToday(g: Goal) {
+  const e = s.data.entries.find(
+    (x) => x.goalId === g.id && x.memberId === s.slot && x.date === today(),
+  );
+  if (!e) return;
+  task.run(async () => {
+    await s.submit("record.delete", { id: e.id }, "撤销今天的打卡", "entries");
+    openAction.value = "";
+  });
+}
 function add(both = false) {
   editing.value = undefined;
   shared.value = both;
@@ -106,9 +137,13 @@ function remove(g: Goal) {
         ></PageHead
       >
       <div class="mini-tabs goal-status-tabs">
-        <button :class="{ on: !archived }" @click="archived = false">
+        <button
+          class="mini-tab"
+          :class="{ on: !archived }"
+          @click="archived = false"
+        >
           正在进行</button
-        ><button :class="{ on: archived }" @click="archived = true">
+        ><button class="mini-tab" :class="{ on: archived }" @click="archived = true">
           已归档
         </button>
       </div>
@@ -132,7 +167,10 @@ function remove(g: Goal) {
           v-for="g in group.items"
           :key="g.id"
           class="goal-card"
-          :class="{ 'goal-card-done': done(g) }"
+          :class="{
+            'goal-card-done': done(g),
+            'goal-card-archived': archived,
+          }"
         >
           <span class="goal-ico">
             <Icon
@@ -190,15 +228,16 @@ function remove(g: Goal) {
                 catName(g)
               }}</span
               ><span class="goal-sep">·</span
-              ><span class="goal-pt">+{{ g.pointsPerCheckin }}</span
-              ><b v-if="justLogged[g.id] && gained[g.id]" class="goal-gain"
-                >· 已到账</b
+              ><span
+                class="goal-pt"
+                :class="{ just: justLogged[g.id] && gained[g.id] }"
+                >+{{ g.pointsPerCheckin }}</span
               >
             </template>
           </div>
           <div class="goal-cta">
             <button
-              v-if="g.joined === false && g.memberId !== s.slot && !archived"
+              v-if="cta(g) === 'join'"
               class="btn-mini"
               @click="
                 task.run(async () => {
@@ -207,19 +246,16 @@ function remove(g: Goal) {
               "
             >
               加入</button
+            ><template v-else-if="cta(g) === 'today'"
+              ><span class="btn-mini done-today"
+                ><Icon name="check" :size="11" />已打卡</span
+              ></template
             ><button
-              v-if="justLogged[g.id]"
-              class="btn-mini undo"
-              :aria-label="'撤销刚才记的：' + g.name"
-              @click="undoGoal(g)"
-            >
-              撤销</button
-            ><button
-              v-else-if="g.joined !== false && !archived"
+              v-else-if="cta(g) === 'done' || cta(g) === 'log'"
               class="btn-mini"
-              :disabled="s.reached(g)"
+              :disabled="cta(g) === 'done'"
               :aria-label="
-                (s.reached(g)
+                (cta(g) === 'done'
                   ? '已完成：'
                   : g.kind === 'once'
                     ? '完成：'
@@ -228,12 +264,22 @@ function remove(g: Goal) {
               @click="logGoal(g)"
             >
               {{
-                s.reached(g) ? "已完成" : g.kind === "once" ? "完成" : "打卡"
+                cta(g) === "done"
+                  ? "已完成"
+                  : g.kind === "once"
+                    ? "完成"
+                    : "打卡"
               }}
             </button>
           </div>
           <div v-if="canEdit(g) && openAction === g.id" class="goal-more">
-            <button v-if="!archived" class="card-link" @click="archive(g)">
+            <button
+              v-if="!archived && todayDone(g)"
+              class="card-link"
+              @click="undoToday(g)"
+            >
+              撤销今天的打卡</button
+            ><button v-if="!archived" class="card-link" @click="archive(g)">
               结束并归档</button
             ><button
               v-else-if="g.kind !== 'once' || !s.progress(g)"
