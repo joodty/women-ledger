@@ -108,6 +108,23 @@ export interface SpaceData {
   redemptions: Redemption[];
   weekly_settlements: unknown[];
   sparks: string[];
+  wake_alarms?: WakeAlarm[];
+}
+export interface WakeAlarm {
+  id: string;
+  memberId: Slot;
+  target: Slot;
+  date: string;
+  time: string;
+  days: number[];
+  tone: "gentle" | "bright" | "rising";
+  note: string;
+  enabled: boolean;
+}
+export interface AlarmReceipt {
+  version: number;
+  nextAt: number;
+  status: "scheduled" | "paused" | "permission" | "expired" | "error";
 }
 export interface Session {
   account: string;
@@ -118,6 +135,7 @@ export interface Session {
   members: { account: string; slot: Slot }[];
 }
 export interface Bootstrap {
+  alarmReceipts?: Record<string, AlarmReceipt>;
   revision: number;
   data: SpaceData;
   versions: Record<string, Record<string, number>>;

@@ -92,7 +92,10 @@ function view(db) {
           stored.unindexed[collection] ||
           stored.orders[collection].map((id) => map.get(id));
       }
-      if (!util.isDeepStrictEqual(data, JSON.parse(dataset.json)))
+      const original = JSON.parse(dataset.json);
+      if (!Object.hasOwn(original, "wake_alarms") && data.wake_alarms?.length === 0)
+        delete data.wake_alarms;
+      if (!util.isDeepStrictEqual(data, original))
         throw Error("entity projection differs from original dataset");
     }
     if (db.prepare("PRAGMA integrity_check").get().integrity_check !== "ok")

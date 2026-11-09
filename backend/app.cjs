@@ -15,7 +15,8 @@ const { session } = require("./security.cjs"),
 const auth = require("./routes/auth.cjs"),
   state = require("./routes/state.cjs"),
   redemptions = require("./routes/redemptions.cjs"),
-  commands = require("./routes/commands.cjs");
+  commands = require("./routes/commands.cjs"),
+  { route: alarms } = require("./routes/alarms.cjs");
 const root = process.env.WOMEN_APP_ROOT,
   publicDir =
     process.env.WOMEN_PUBLIC_DIR ||
@@ -77,9 +78,11 @@ function staticFile(req, res, pathname) {
         ? "text/javascript"
         : file.endsWith(".svg")
           ? "image/svg+xml"
+          : file.endsWith(".wav")
+            ? "audio/wav"
           : "text/html";
   res.writeHead(200, {
-    "Content-Type": type + (apk ? "" : "; charset=utf-8"),
+    "Content-Type": type + (apk || type === "audio/wav" ? "" : "; charset=utf-8"),
     "Content-Length": size,
     "Cache-Control": name.startsWith("assets/")
       ? "public, max-age=31536000, immutable"
@@ -135,6 +138,7 @@ const server = http.createServer(async (req, res) => {
         requestId,
       });
     if (await commands(req, res, pathname, s)) return;
+    if (await alarms(req, res, pathname, s)) return;
     if (await redemptions(req, res, pathname, s)) return;
     if (await state(req, res, pathname, s)) return;
     send(res, 404, { code: "not_found", error: "未找到", requestId });

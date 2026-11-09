@@ -11,6 +11,7 @@ const collections = [
   "story_entries",
   "milestones",
   "redemptions",
+  "wake_alarms",
 ];
 db.exec(`CREATE TABLE IF NOT EXISTS entity_rows(space_id TEXT NOT NULL,collection TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(space_id,collection,id));
 CREATE TABLE IF NOT EXISTS entity_meta(space_id TEXT PRIMARY KEY,revision INTEGER NOT NULL,json TEXT NOT NULL);
@@ -100,7 +101,7 @@ function load(space) {
     const byId = new Map(rows.map((r) => [r.id, JSON.parse(r.json)]));
     data[c] =
       stored.unindexed[c] ||
-      stored.orders[c].map((id) => byId.get(id)).filter(Boolean);
+      (stored.orders[c] || []).map((id) => byId.get(id)).filter(Boolean);
     versions[c] = Object.fromEntries(rows.map((r) => [r.id, r.version]));
   }
   versions.settings={couple:db.prepare("SELECT version FROM entity_rows WHERE space_id=? AND collection='settings' AND id='couple'").get(space).version};

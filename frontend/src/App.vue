@@ -15,6 +15,7 @@ const route = useRoute();
 /* 愿望清单是兑换页管出来的子页，进它的时候底部「兑换」要亮着，不然看不出自己在哪 */
 function tabOn(path: string) {
   if (path === "/points") return route.path === "/points" || route.path === "/wishlist";
+  if (path === "/together" && route.path === "/alarms") return true;
   return route.path === path;
 }
 function refreshPage() {

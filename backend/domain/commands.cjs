@@ -11,6 +11,7 @@ const handlers = [
   require("./meetings.cjs"),
   require("./imports.cjs"),
   require("./redemptions.cjs"),
+  require("./alarms.cjs"),
 ];
 function apply(data, command, session, versions) {
   const { type, payload: p } = command,
@@ -34,6 +35,7 @@ function apply(data, command, session, versions) {
       409,
       { collection, id: item.id, current: item, version: actual },
     );
+    return actual;
   }
   function create(collection, item) {
     fail(

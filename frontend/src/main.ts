@@ -11,6 +11,7 @@ import Review from "./features/ReviewPage.vue";
 import Settings from "./features/SettingsPage.vue";
 import WishList from "./features/WishListPage.vue";
 import Meet from "./features/MeetPage.vue";
+import Alarms from "./features/AlarmsPage.vue";
 import StoryFull from "./features/StoryFullPage.vue";
 import "./styles/theme.css";
 import "./styles/app.css";
@@ -25,6 +26,7 @@ const routes = [
   { path: "/palette", component: Settings },
   { path: "/wishlist", component: WishList },
   { path: "/meet", component: Meet },
+  { path: "/alarms", component: Alarms },
   { path: "/past", component: Meet },
   { path: "/story/full", component: StoryFull },
   { path: "/:pathMatch(.*)*", redirect: "/" },

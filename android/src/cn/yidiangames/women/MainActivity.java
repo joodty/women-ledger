@@ -104,12 +104,14 @@ public final class MainActivity extends Activity {
             if(!allowed(Uri.parse(web.getUrl()==null?"":web.getUrl())))return;
             try{String raw=message.getData();if(raw==null||raw.length()>8192)return;JSONObject payload=new JSONObject(raw);String type=payload.optString("type");
                 if("sync".equals(type)){org.json.JSONArray items=payload.optJSONArray("reminders");if(!ReminderStore.replace(MainActivity.this,payload.optString("account"),items))Toast.makeText(MainActivity.this,"提醒设置无效，请重新保存",Toast.LENGTH_LONG).show();else if(items!=null&&items.length()>0&&Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED&&!getSharedPreferences("reminder_permissions",MODE_PRIVATE).getBoolean("asked",false)){getSharedPreferences("reminder_permissions",MODE_PRIVATE).edit().putBoolean("asked",true).apply();requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_PERMISSION);}}
-                else if("clear".equals(type)){ReminderStore.clear(MainActivity.this,payload.optString("account"));String id=payload.optString("requestId");if(!id.isEmpty())port.postMessage(new WebMessage(new JSONObject().put("requestId",id).toString()));}
+                else if("clear".equals(type)){ReminderStore.clear(MainActivity.this,payload.optString("account"));WakeAlarmSync.clear(MainActivity.this);String id=payload.optString("requestId");if(!id.isEmpty())port.postMessage(new WebMessage(new JSONObject().put("requestId",id).toString()));}
+                else if("wake-alarm-sync".equals(type)){WakeAlarmSync.start(MainActivity.this);}
                 else if("request-permission".equals(type))requestReminderPermissions();
                 else if(type.startsWith("export-"))documentExports.message(port,payload);
             }catch(Exception ignored){Toast.makeText(MainActivity.this,"提醒设置未能同步",Toast.LENGTH_LONG).show();}
         }});
         view.postWebMessage(new WebMessage("women-reminders-v1",new WebMessagePort[]{ports[1]}),Uri.parse("https://tn.yidiangames.cn"));
+        reminderPort.postMessage(new WebMessage("{\"wakeAlarms\":true}"));
     }
     private void requestReminderPermissions(){
         if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){getSharedPreferences("reminder_permissions",MODE_PRIVATE).edit().putBoolean("asked",true).apply();requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_PERMISSION);return;}

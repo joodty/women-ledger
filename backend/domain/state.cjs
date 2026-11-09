@@ -156,6 +156,7 @@ function visibleState(data, slot) {
 }
 function visibleHistory(data, slot) {
   const result = visibleState(data, slot);
+  delete result.wake_alarms;
   // An item shared in the past can become private later; historical snapshots
   // must not give the other account a way to recover its former contents.
   for (const key of ["entries", "goals"])

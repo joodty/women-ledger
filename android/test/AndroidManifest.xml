@@ -2,4 +2,5 @@
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="33" />
     <application android:label="Reminder test" />
     <instrumentation android:name=".ReminderInstrumentation" android:targetPackage="cn.yidiangames.women" />
+    <instrumentation android:name=".WakeAlarmInstrumentation" android:targetPackage="cn.yidiangames.women" />
 </manifest>

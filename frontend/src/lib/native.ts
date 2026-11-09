@@ -1,6 +1,7 @@
-import { watch } from "vue";
+import { ref, watch } from "vue";
 import type { useSpace } from "../stores/space";
 let port: MessagePort | null = null;
+export const wakeAlarmNative = ref(false);
 const waiting = new Map<
   string,
   {
@@ -12,6 +13,8 @@ const waiting = new Map<
 export function connectNative(s: ReturnType<typeof useSpace>) {
   function send() {
     if (!port || !s.session || s.pending.length) return;
+    if (wakeAlarmNative.value && !s.needsLogin)
+      port.postMessage(JSON.stringify({ type: "wake-alarm-sync" }));
     port.postMessage(
       JSON.stringify({
         type: "sync",
@@ -40,6 +43,10 @@ export function connectNative(s: ReturnType<typeof useSpace>) {
       try {
         const result = JSON.parse(e.data),
           entry = waiting.get(result.requestId);
+        if (result.wakeAlarms === true) {
+          wakeAlarmNative.value = true;
+          send();
+        }
         if (entry) {
           clearTimeout(entry.timer);
           waiting.delete(result.requestId);

@@ -31,6 +31,7 @@ export const useSpace = defineStore("space", () => {
   const data = ref<SpaceData>(structuredClone(empty)),
     session = ref<Session | null>(null),
     versions = ref<Bootstrap["versions"]>({}),
+    alarmReceipts = ref<NonNullable<Bootstrap["alarmReceipts"]>>({}),
     revision = ref(0),
     ready = ref(false),
     needsLogin = ref(false),
@@ -54,6 +55,7 @@ export const useSpace = defineStore("space", () => {
     data.value = b.data;
     session.value = b.session;
     versions.value = b.versions;
+    alarmReceipts.value = b.alarmReceipts || {};
     revision.value = b.revision;
     ready.value = true;
     offline.value = false;
@@ -116,6 +118,7 @@ export const useSpace = defineStore("space", () => {
     if (pending.value.length) throw Error("还有本机待提交内容，请先处理或导出");
     await post("/api/logout", {});
     data.value = structuredClone(empty);
+    alarmReceipts.value = {};
     ready.value = false;
     session.value = null;
     needsLogin.value = true;
@@ -339,6 +342,7 @@ export const useSpace = defineStore("space", () => {
     data,
     session,
     versions,
+    alarmReceipts,
     revision,
     ready,
     needsLogin,

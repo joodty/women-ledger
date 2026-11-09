@@ -12,6 +12,11 @@ const {
   mergeValue,
 } = require("../domain/state.cjs");
 const { reconcilePoints, walletTag } = require("../domain/points.cjs");
+function legacyView(data, slot) {
+  const visible = visibleState(data, slot);
+  delete visible.wake_alarms;
+  return visible;
+}
 module.exports = async function (req, res, pathname, s) {
   const legacy = s.space_id === "legacy",
     space = s.space_id;
@@ -60,7 +65,7 @@ module.exports = async function (req, res, pathname, s) {
       row
         ? {
             revision: row.revision,
-            data: visibleState(JSON.parse(row.json), s.slot),
+            data: legacyView(JSON.parse(row.json), s.slot),
           }
         : { revision: 0, data: null },
     );
@@ -79,6 +84,8 @@ module.exports = async function (req, res, pathname, s) {
         current = row ? row.revision : 0;
       /* 奖励已经整块删掉了：老客户端还会把 rewards 带上，收下但直接丢掉，不入库 */
       delete body.data.rewards;
+      // Legacy whole-space writes never create, edit, or cancel an alarm.
+      delete body.data.wake_alarms;
       let data = body.data,
         merged = false;
       const fullCurrent = row ? JSON.parse(row.json) : null;
@@ -106,7 +113,7 @@ module.exports = async function (req, res, pathname, s) {
       }
       try {
         const base = baseFull
-          ? visibleState(baseFull, s.slot)
+          ? legacyView(baseFull, s.slot)
           : { entries: [], goals: [], points_ledger: [], redemptions: [] };
         protectPersonal(base, data, s.slot);
         if (
@@ -115,7 +122,7 @@ module.exports = async function (req, res, pathname, s) {
         )
           throw Error("积分由服务端处理");
         if (current !== body.revision) {
-          data = mergeValue(base, data, visibleState(fullCurrent, s.slot));
+          data = mergeValue(base, data, legacyView(fullCurrent, s.slot));
           merged = true;
         }
         if (fullCurrent) {
@@ -149,6 +156,7 @@ module.exports = async function (req, res, pathname, s) {
           revision: current,
         });
       }
+      data.wake_alarms = fullCurrent?.wake_alarms || [];
       const now = new Date().toISOString();
       if (row) {
         if (legacy)
@@ -179,7 +187,7 @@ module.exports = async function (req, res, pathname, s) {
       db.exec("COMMIT");
       return send(res, 200, {
         revision: rev,
-        data: visibleState(data, s.slot),
+        data: legacyView(data, s.slot),
       });
     } catch (e) {
       db.exec("ROLLBACK");

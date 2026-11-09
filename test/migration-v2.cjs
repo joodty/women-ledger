@@ -106,7 +106,7 @@ async function run(entry) {
   });
   assert.equal(response.status, 200);
   const result = await response.json();
-  assert.deepEqual(result.data, expected);
+  assert.deepEqual(result.data, { ...expected, wake_alarms: [] });
   assert.equal(result.revision, 23);
   const check = new DatabaseSync(file, { readOnly: true });
   assert.equal(

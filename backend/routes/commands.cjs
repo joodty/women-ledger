@@ -8,6 +8,7 @@ const { visibleState, validState } = require("../domain/state.cjs");
 const { reconcilePoints } = require("../domain/points.cjs");
 const { send, getBody } = require("../http.cjs");
 const { fail } = require("../errors.cjs");
+const { receipts } = require("./alarms.cjs");
 function bootstrap(s) {
   let current = repo.load(s.space_id);
   const members = db
@@ -37,6 +38,7 @@ function bootstrap(s) {
     revision: current.revision,
     data,
     versions,
+    alarmReceipts: receipts(s.space_id),
     session: {
       account: s.user_id,
       slot: s.slot,

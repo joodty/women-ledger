@@ -31,6 +31,7 @@ function seed(members) {
     story_entries: [],
     milestones: [],
     redemptions: [],
+    wake_alarms: [],
     sparks: [
       "她把信纸折成一只小鸟，放进雨后的水洼。",
       "那天风很大，他们约好下次见。",

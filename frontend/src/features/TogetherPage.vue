@@ -141,6 +141,14 @@ const doneTotal = computed(() =>
       </div>
       <HistoryTimeline :limit="5" />
     </section>
+    <RouterLink to="/alarms" class="list-row story-link">
+      <span class="list-ico"><Icon name="clock" :size="19" /></span>
+      <span class="list-main">
+        <span class="list-k">叫醒闹钟</span>
+        <span class="list-d">给对方设个闹钟，留一句早安</span>
+      </span>
+      <Icon name="right" :size="16" />
+    </RouterLink>
     <RouterLink to="/story" class="list-row story-link"
       ><span class="list-ico"><Icon name="speech" :size="19" /></span
       ><span class="list-main"
