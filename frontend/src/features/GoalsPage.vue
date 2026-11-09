@@ -36,10 +36,22 @@ const ordered = (both: boolean) =>
     .filter((g) => (g.scope === "both") === both)
     .slice()
     .sort((a, b) => sunk(a) - sunk(b));
+/* 分组标题只留主谓：卡片里已经写清楚了是什么，标题再重复一遍只是噪音 */
 const groups = computed(() => [
-  { title: "我的约定", items: ordered(false) },
-  { title: "我们的约定", items: ordered(true) },
+  { title: "我的", items: ordered(false) },
+  { title: "一起", items: ordered(true) },
 ]);
+const done = (g: Goal) => s.reached(g);
+const catOf = (g: Goal) =>
+  s.data.categories.find((c) => c.id === g.categoryId);
+const catName = (g: Goal) => catOf(g)?.name || "未分类";
+const catColor = (g: Goal) => catOf(g)?.color || "var(--ink-3)";
+/* 一周要做二十次的约定，点排下来会溢出。超过十个就不画点，只留数字 ——
+   挤成一排的小点看不出数，反而像是装饰 */
+const dots = (g: Goal) => {
+  const n = g.timesPerWeek || 1;
+  return n > 10 ? 0 : n;
+};
 function add(both = false) {
   editing.value = undefined;
   shared.value = both;
@@ -88,10 +100,7 @@ function remove(g: Goal) {
 <template>
   <div class="page">
     <div class="sub-wrap">
-      <PageHead
-        title="约定"
-        subtitle="定下的事，每做到一次打一次卡，每次都有分。"
-        back
+      <PageHead title="约定" back
         ><span
           >{{ visible.filter((g) => g.scope !== "both").length }}/3</span
         ></PageHead
@@ -123,19 +132,22 @@ function remove(g: Goal) {
           v-for="g in group.items"
           :key="g.id"
           class="goal-card"
-          :class="{
-            'goal-card-done':
-              s.progress(g) >= (g.kind === 'once' ? 1 : g.timesPerWeek || 1),
-          }"
+          :class="{ 'goal-card-done': done(g) }"
         >
-          <div class="goal-head">
-            <span class="goal-ico"><Icon name="target" :size="20" /></span
-            ><span class="goal-title"
-              ><span class="goal-name">{{ g.name }}</span
-              ><span v-if="g.memberId !== s.slot" class="goal-by"
-                >{{ s.member(g.memberId).name }}建的</span
-              ></span
-            ><button
+          <span class="goal-ico">
+            <Icon
+              :name="done(g) ? 'check' : g.scope === 'both' ? 'rings' : 'ring'"
+              :size="22"
+            />
+          </span>
+          <div class="goal-line">
+            <span class="goal-name">{{ g.name }}</span
+            ><span v-if="g.memberId !== s.slot" class="goal-by"
+              >{{ s.member(g.memberId).name }}建的</span
+            >
+          </div>
+          <div class="goal-acts">
+            <button
               v-if="canEdit(g)"
               class="goal-edit"
               :aria-label="'修改约定：' + g.name"
@@ -144,7 +156,7 @@ function remove(g: Goal) {
                 editor = true;
               "
             >
-              <Icon name="edit" :size="17" /></button
+              <Icon name="edit" :size="16" /></button
             ><button
               v-if="canEdit(g)"
               class="goal-dots"
@@ -152,89 +164,73 @@ function remove(g: Goal) {
               :aria-expanded="openAction === g.id"
               @click="openAction = openAction === g.id ? '' : g.id"
             >
-              <Icon name="down" :size="15" />
+              <Icon name="down" :size="14" />
             </button>
           </div>
-          <div class="kv">
-            <span class="kv-k">分类</span
-            ><span class="kv-v">{{
-              s.data.categories.find((c) => c.id === g.categoryId)?.name ||
-              "未分类"
-            }}</span>
-          </div>
-          <div class="kv">
-            <span class="kv-k">做到一次</span
-            ><span class="kv-v"
-              >{{ g.pointsPerCheckin }} 分 · 进{{
-                g.scope === "both" ? "我们的分" : "我的分"
-              }}</span
-            >
-          </div>
-          <div class="goal-foot">
-            <span class="goal-stat prog-dots"
-              ><template v-if="g.kind !== 'once'"
+          <div class="goal-meta">
+            <span v-if="g.joined === false" class="goal-txt">等待对方加入</span>
+            <template v-else>
+              <span v-if="g.kind !== 'once'" class="prog-dots"
                 ><span
-                  v-for="n in Math.min(21, g.timesPerWeek || 1)"
+                  v-for="n in dots(g)"
                   :key="n"
                   class="dot-s"
                   :class="{ on: n <= s.progress(g) }"
-                  :style="{
-                    color: s.data.categories.find((c) => c.id === g.categoryId)
-                      ?.color,
-                  }"
-                ></span></template
-              ><span class="txt">{{
-                g.joined === false
-                  ? "等待对方加入"
-                  : g.kind === "once"
-                    ? s.progress(g)
-                      ? "已完成"
-                      : "一次就完"
-                    : `${s.progress(g)}/${g.timesPerWeek || 1}`
+                  :style="{ color: catColor(g) }"
+                ></span
+                ><span class="txt"
+                  >{{ s.progress(g) }}/{{ g.timesPerWeek || 1 }}</span
+                ></span
+              >
+              <span v-else class="goal-txt">{{
+                s.progress(g) ? "已完成" : "一次就完"
+              }}</span>
+              <span class="goal-sep">·</span
+              ><span class="goal-cat" :style="{ color: catColor(g) }">{{
+                catName(g)
               }}</span
-            ><b v-if="justLogged[g.id] && gained[g.id]" class="goal-gain"
-              >· +{{ gained[g.id].points }} 分</b
-            ></span
-            ><span class="goal-btns"
-              ><button
-                v-if="g.joined === false && g.memberId !== s.slot && !archived"
-                class="btn-mini"
-                @click="
-                  task.run(async () => {
-                    await s.submit('goal.join', { id: g.id }, '加入约定');
-                  })
-                "
+              ><span class="goal-sep">·</span
+              ><span class="goal-pt">+{{ g.pointsPerCheckin }}</span
+              ><b v-if="justLogged[g.id] && gained[g.id]" class="goal-gain"
+                >· 已到账</b
               >
-                加入</button
-              ><button
-                v-if="justLogged[g.id]"
-                class="btn-mini undo"
-                :aria-label="'撤销刚才记的：' + g.name"
-                @click="undoGoal(g)"
-              >
-                撤销</button
-              ><button
-                v-else-if="g.joined !== false && !archived"
-                class="btn-mini"
-                :disabled="s.reached(g)"
-                :aria-label="
-                  (s.reached(g)
-                    ? '已完成：'
-                    : g.kind === 'once'
-                      ? '完成：'
-                      : '打卡：') + g.name
-                "
-                @click="logGoal(g)"
-              >
-                {{
-                  s.reached(g)
-                    ? "已完成"
-                    : g.kind === "once"
-                      ? "完成"
-                      : "打卡"
-                }}
-              </button></span
+            </template>
+          </div>
+          <div class="goal-cta">
+            <button
+              v-if="g.joined === false && g.memberId !== s.slot && !archived"
+              class="btn-mini"
+              @click="
+                task.run(async () => {
+                  await s.submit('goal.join', { id: g.id }, '加入约定');
+                })
+              "
             >
+              加入</button
+            ><button
+              v-if="justLogged[g.id]"
+              class="btn-mini undo"
+              :aria-label="'撤销刚才记的：' + g.name"
+              @click="undoGoal(g)"
+            >
+              撤销</button
+            ><button
+              v-else-if="g.joined !== false && !archived"
+              class="btn-mini"
+              :disabled="s.reached(g)"
+              :aria-label="
+                (s.reached(g)
+                  ? '已完成：'
+                  : g.kind === 'once'
+                    ? '完成：'
+                    : '打卡：') + g.name
+              "
+              @click="logGoal(g)"
+            >
+              {{
+                s.reached(g) ? "已完成" : g.kind === "once" ? "完成" : "打卡"
+              }}
+            </button>
           </div>
           <div v-if="canEdit(g) && openAction === g.id" class="goal-more">
             <button v-if="!archived" class="card-link" @click="archive(g)">

@@ -37,6 +37,10 @@ export const icons: Record<string, string> = {
     '<path d="M12 3.2a8.8 8.8 0 0 0 0 17.6c1.4 0 2-1 2-1.9 0-1.5-1.4-1.7-1.4-3 0-1 .9-1.8 2-1.8h1.6A5.6 5.6 0 0 0 20.8 8.6C20.2 5.4 16.6 3.2 12 3.2z"/><circle cx="8.2" cy="9.4" r="1.1"/><circle cx="12" cy="7.4" r="1.1"/><circle cx="15.6" cy="9.4" r="1.1"/>',
   target:
     '<circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1"/>',
+  /* 一个人的约定是一个圈，两个人一起的是同心两个圈。
+     内圈留 4.2 的空，26px 下才分得出是两圈而不是一个粗圆 */
+  ring: '<circle cx="12" cy="12" r="8.6"/>',
+  rings: '<circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="5"/>',
   plane:
     '<path d="M20.4 4.4 3.6 11.2l6.2 2.2 2.2 6.2z"/><path d="M20.4 4.4 9.8 13.4"/>',
   speech:

@@ -1705,47 +1705,105 @@ svg {
   letter-spacing: 0.2px;
 }
 
-/* 长期目标卡 */
+/* 长期目标卡：两行。第一行名字，第二行状态。
+   分类和分值原来是各占一整行的「设定」，每天都要看它太吵，压进第二行小字里 */
 .goal-card {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "ico line acts"
+    "ico meta cta";
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
   background: var(--card);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 9px 12px;
   box-shadow: var(--shadow);
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
-.goal-head {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  margin-bottom: 14px;
-}
+/* 一个人的约定一个圈，两个人一起的是同心两个圈 —— 只靠这个分辨归属 */
 .goal-ico {
-  width: 40px;
-  height: 40px;
-  border-radius: 13px;
+  grid-area: ico;
+  align-self: center;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-  background: var(--pink-soft);
-  color: var(--pink-deep);
+  color: var(--ink-3);
 }
-.goal-ico svg {
-  width: 20px;
-  height: 20px;
-}
-.goal-title {
-  flex: 1;
-  min-width: 0;
+.goal-line {
+  grid-area: line;
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 7px;
+  min-width: 0;
+}
+.goal-acts {
+  grid-area: acts;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.goal-meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.goal-meta .prog-dots {
+  margin-top: 0;
+  gap: 4px;
+}
+.goal-meta .dot-s {
+  width: 7px;
+  height: 7px;
+}
+.goal-meta .prog-dots .txt {
+  margin-left: 2px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.goal-cat,
+.goal-sep,
+.goal-pt,
+.goal-txt {
+  flex: 0 0 auto;
+}
+.goal-sep {
+  color: var(--line-2);
+}
+.goal-pt {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--pink-deep);
+}
+.goal-cta {
+  grid-area: cta;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* 展开的「结束 / 删除」横跨整行，不然会被挤进 24px 的图标列里 */
+.goal-more {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
 }
 .goal-name {
   font-family: var(--serif);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -1759,30 +1817,20 @@ svg {
   color: var(--ink-4);
   letter-spacing: 0.2px;
 }
-.goal-edit {
+/* 铅笔和「∨」还在原位，但只有铅笔能进编辑 —— 整行可点会误触 */
+.goal-edit,
+.goal-dots {
   color: var(--ink-4);
   display: flex;
+  padding: 2px;
 }
 .goal-edit svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
-.kv {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 0;
-  font-size: 13.5px;
-}
-.kv-k {
-  width: 64px;
-  color: var(--ink-3);
-  flex: 0 0 auto;
-  font-size: 13px;
-}
-.kv-v {
-  flex: 1;
-  color: var(--ink);
+.goal-dots svg {
+  width: 14px;
+  height: 14px;
 }
 .kw-list {
   display: flex;
@@ -1804,36 +1852,21 @@ svg {
   background: var(--blue-soft);
   color: var(--blue-ink);
 }
-.goal-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-top: 1px solid var(--line);
-  margin-top: 13px;
-  padding-top: 13px;
-}
-.goal-stat {
-  font-size: 12.5px;
-  color: var(--ink-2);
-}
-.goal-stat b {
-  font-family: var(--mono);
-  color: var(--ink);
-}
-.goal-btns {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-}
 .btn-mini {
-  padding: 6px 13px;
-  border-radius: 14px;
-  font-size: 12.5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
   background: var(--pink-soft);
   color: var(--pink-ink);
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+}
+/* 做完了就把按钮按下去：它同时是「已经做过」的第三个提示，光靠变淡不够 */
+.btn-mini:disabled {
+  background: var(--gray-soft);
+  color: var(--ink-4);
 }
 .btn-mini svg {
   width: 13px;
@@ -2444,7 +2477,7 @@ svg {
   font-size: 12.5px;
   color: var(--ink-3);
   letter-spacing: 0.4px;
-  padding: 10px 0 2px;
+  padding: 10px 0 7px;
 }
 .wl-sec-head .n {
   font-size: 11px;
@@ -3406,6 +3439,7 @@ button.member-nm:active {
 /* 加到的分要看得见，否则打完卡像什么都没发生 */
 .goal-gain {
   color: var(--pink-deep);
+  font-size: 11px;
   font-weight: 600;
 }
 .goal-undo {
@@ -3417,16 +3451,19 @@ button.member-nm:active {
   color: var(--ink-3);
   text-decoration: underline;
 }
-/* 约定页：做完的卡片淡下去，但还看得见 */
+/* 做完的卡片：整条淡下去、图标变勾、按钮灰掉。三处一起说，
+   只靠变淡是不够的 —— 之前就是淡到看不出「做完了」和「还没做」的区别 */
 .goal-card-done {
-  opacity: 0.6;
+  opacity: 0.62;
+  background: var(--gray-soft);
+  box-shadow: none;
+}
+.goal-card-done .goal-ico {
+  color: var(--ink-2);
 }
 .goal-card-done .goal-name {
   text-decoration: line-through;
   text-decoration-color: var(--line-2);
-}
-.goal-foot .prog-dots {
-  margin-top: 0;
 }
 /* 「加一个」是一行字，不要按钮感 */
 button.sum-go {
