@@ -154,14 +154,7 @@ function remove(g: Goal) {
         class="wl-sec"
       >
         <div class="wl-sec-head">
-          {{ group.title }}<span class="n">{{ group.items.length }}</span
-          ><button
-            v-if="index === 1 && !archived"
-            class="sum-go"
-            @click="add(true)"
-          >
-            <Icon name="plus" :size="14" />加一个
-          </button>
+          {{ group.title }}<span class="n">{{ group.items.length }}</span>
         </div>
         <article
           v-for="g in group.items"
@@ -294,12 +287,12 @@ function remove(g: Goal) {
         <div v-if="!group.items.length" class="empty">
           还没有约定。<br />从一件小到不会失败的事开始。
         </div>
-        <button
-          v-if="index === 0 && !archived"
-          class="add-block"
-          @click="add(false)"
-        >
-          <Icon name="plus" :size="15" />新增约定 · {{ group.items.length }}/3
+        <!-- 每组末尾各一个，长得一样：组里放的是谁的约定，它加的就是谁的。
+             个人这边带着 3 个的上限，一起那边没有 -->
+        <button v-if="!archived" class="add-block" @click="add(index === 1)">
+          <Icon name="plus" :size="15" />新增约定{{
+            index === 0 ? ` · ${group.items.length}/3` : ""
+          }}
         </button>
       </section>
       <div class="page-foot">归档或删除后，已有记录保留</div>

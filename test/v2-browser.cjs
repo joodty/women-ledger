@@ -63,7 +63,8 @@ const server = spawn(process.execPath, ["server.cjs"], {
       (await page.request.get(base + "/api/v2/bootstrap")).json();
     await register(a, "alice");
     await a.goto(base + "/#/goals");
-    await a.getByRole("button", { name: "新增约定" }).click();
+    /* 两个分组末尾各一个「新增约定」，取第一个（个人那组） */
+    await a.getByRole("button", { name: /^新增约定/ }).first().click();
     await a.getByLabel("约定名称").fill("共同运动");
     await a
       .getByRole("group", { name: "属于谁", exact: true })

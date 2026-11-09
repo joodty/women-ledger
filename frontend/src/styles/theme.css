@@ -1884,6 +1884,8 @@ svg {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  /* button 默认按内容宽度收缩，两个「新增约定」文案不一样长就会一宽一窄 */
+  width: 100%;
   background: var(--pink-soft);
   color: var(--pink-ink);
   border-radius: 18px;
@@ -2490,13 +2492,6 @@ svg {
 .wi-btn.his svg {
   display: none;
 }
-.sum-go {
-  display: flex;
-  align-items: center;
-  color: var(--ink-4);
-  margin-left: auto;
-}
-
 /* ---------------- 底部弹层（记一笔） ---------------- */
 .sheet-mask {
   position: fixed;
@@ -3460,22 +3455,3 @@ button.member-nm:active {
   color: var(--ink-4);
 }
 /* 「加一个」是一行字，不要按钮感 */
-/* 「新增约定」和「加一个」是同一件事，就该长一样：粉底胶囊、同一个加号。
-   原来的「加一个」是纯文字，跟上面那个按钮看着不像一家的 */
-button.sum-go {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  padding: 4px 11px;
-  border-radius: 13px;
-  background: var(--pink-soft);
-  color: var(--pink-ink);
-  font-size: 12px;
-  letter-spacing: 0.2px;
-  cursor: pointer;
-}
-button.sum-go:active {
-  background: var(--pink-soft-2);
-}
