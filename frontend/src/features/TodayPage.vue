@@ -152,7 +152,12 @@ function edit(e: Entry) {
             :size="11"
         /></button>
       </div>
-      <EntryList :entries="rows" :editable="side === s.slot" @edit="edit" />
+      <EntryList
+        :entries="rows"
+        :editable="side === s.slot"
+        merge
+        @edit="edit"
+      />
     </section>
     <section class="card">
       <div class="card-title">
