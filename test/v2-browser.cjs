@@ -134,7 +134,12 @@ const server = spawn(process.execPath, ["server.cjs"], {
     await a.getByRole("button", { name: "记一笔", exact: true }).click();
     await a.getByLabel("做了什么").fill("重启后仍可提交的离线记录");
     await a.getByRole("button", { name: "保存记录" }).click();
-    await expect(a.getByRole("button", { name: "查看待处理" })).toBeVisible();
+    /* 顶栏那行「已同步 · 刷新 · 更多」拆掉了，待提交内容的入口挪到设置页的
+       「同步状态」一行。离线时只改 hash，不做整页导航 —— 整页导航要服务器 */
+    await a.evaluate(() => (location.hash = "#/settings"));
+    await expect(a.locator(".sync-row .list-d")).toContainText("还没交上去");
+    await expect(a.locator(".sync-main")).toBeEnabled();
+    await a.evaluate(() => (location.hash = "#/"));
     const offlineKey = await a.evaluate(() =>
       Object.keys(localStorage).find((k) => k === "women.v2.pending.alice"),
     );
@@ -163,7 +168,8 @@ const server = spawn(process.execPath, ["server.cjs"], {
       sessionStorage.removeItem("women.tab");
     });
     await a.reload();
-    await a.getByRole("button", { name: "查看待处理" }).click();
+    await a.goto(base + "/#/settings");
+    await a.getByRole("button", { name: /^同步状态/ }).click();
     await a.getByRole("button", { name: "尝试恢复" }).click();
     await expect
       .poll(async () => (await snapshot(a)).data.couple.since)
@@ -206,7 +212,9 @@ const server = spawn(process.execPath, ["server.cjs"], {
       otherSegment.getByRole("button", { name: "删除这一段", exact: true }),
     ).toHaveCount(0);
     await a.goto(base + "/#/story/full");
-    await a.getByRole("button", { name: "刷新", exact: true }).click();
+    /* 顶栏那个「刷新」按钮已经拆掉，同步挪到设置页。
+       这里要的是「重新拉一次服务器内容」，重载页面等价且更彻底 */
+    await a.reload();
     await expect(
       a.locator(".seg-card").filter({ hasText: "由另一位写的段落" }),
     ).toBeVisible();

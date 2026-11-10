@@ -5,35 +5,16 @@ import AuthPage from "./features/AuthPage.vue";
 import Icon from "./components/Icon.vue";
 import type { Pending } from "./models";
 import { useTask } from "./lib/task";
-import { connectNative, clearNative } from "./lib/native";
-import { useRouter, useRoute } from "vue-router";
+import { connectNative } from "./lib/native";
+import { useRoute } from "vue-router";
 const s = useSpace(),
-  showPending = ref(false),
   task = useTask();
-const router = useRouter();
 const route = useRoute();
 /* 愿望清单是兑换页管出来的子页，进它的时候底部「兑换」要亮着，不然看不出自己在哪 */
 function tabOn(path: string) {
   if (path === "/points") return route.path === "/points" || route.path === "/wishlist";
   if (path === "/together" && route.path === "/alarms") return true;
   return route.path === path;
-}
-function refreshPage() {
-  location.reload();
-}
-function settings(section: string) {
-  router.push({
-    path: "/settings",
-    query: { section, open: String(Date.now()) },
-  });
-}
-async function logout() {
-  await task.run(async () => {
-    const account = s.session!.account;
-    await s.logout();
-    await clearNative(account);
-  });
-  if (task.error.value) s.notice = task.error.value;
 }
 connectNative(s);
 const tabs = [
@@ -85,34 +66,6 @@ function readable(value: unknown) {
     </div>
   </div>
   <div v-else class="app">
-    <div class="v2-sync" role="status">
-      <span>{{
-        s.sending
-          ? "正在保存…"
-          : s.offline
-            ? "网络不稳定，本机内容已保留"
-            : s.pending.length
-              ? "有 " + s.pending.length + " 条待处理内容"
-              : s.recoveries.length
-                ? "发现旧版未同步内容"
-                : "已同步"
-      }}</span
-      ><button
-        v-if="s.pending.length || s.recoveries.length"
-        @click="showPending = !showPending"
-      >
-        查看待处理</button
-      ><button v-else @click="refreshPage">刷新</button>
-      <details class="sync-more">
-        <summary>更多</summary>
-        <div class="sync-menu">
-          <button @click="settings('backup')">导入备份</button
-          ><button @click="settings('history')">历史版本</button
-          ><button @click="settings('password')">修改密码</button
-          ><button @click="logout">退出登录</button>
-        </div>
-      </details>
-    </div>
     <main class="view">
       <RouterView />
       <div v-if="s.notice" class="v2-toast" role="status">
@@ -132,10 +85,10 @@ function readable(value: unknown) {
     </nav>
   </div>
   <Teleport to="body"
-    ><section v-if="showPending && s.ready" class="v2-pending">
+    ><section v-if="s.pendingOpen && s.ready" class="v2-pending">
       <header class="v2-head">
         <h2>本机待提交内容</h2>
-        <button @click="showPending = false">收起</button>
+        <button @click="s.pendingOpen = false">收起</button>
       </header>
       <p>
         内容保存在这台设备上。网络恢复后会尝试提交，遇到需要决定的修改会继续保留。

@@ -192,9 +192,8 @@ function config() {
     recordCheck("两个独立浏览器登录，身份和专用双人空间核对");
     async function refresh(page, route = "/") {
       await ui("navigate to " + route, () => page.goto(c.base + "/#" + route));
-      await ui("refresh deployed page", () =>
-        page.getByRole("button", { name: "刷新", exact: true }).click(),
-      );
+      /* 顶栏的「刷新」按钮已拆掉（同步挪到设置页），要新内容就整页重载 */
+      await ui("reload deployed page", () => page.reload());
     }
     step = "remove previously generated QA goals through their owner UI";
     for (const page of pages) {

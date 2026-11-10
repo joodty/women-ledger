@@ -39,7 +39,10 @@ export const useSpace = defineStore("space", () => {
     sending = ref(false),
     pending = ref<Pending[]>([]),
     notice = ref(""),
-    fatal = ref("");
+    fatal = ref(""),
+    /* 最后一次和服务端对上话的时间。顶栏拆掉之后，「同步到哪一刻了」
+       这件事只有设置页那一行会说，所以每次 accept() 都要记一笔 */
+    lastSync = ref(0);
   let initialized = false;
   const slot = computed<Slot>(() => session.value?.slot || "me"),
     other = computed<Slot>(() => (slot.value === "me" ? "him" : "me"));
@@ -60,6 +63,7 @@ export const useSpace = defineStore("space", () => {
     ready.value = true;
     offline.value = false;
     needsLogin.value = false;
+    lastSync.value = Date.now();
   }
   function version(collection: string, id: string) {
     return versions.value[collection]?.[id];
@@ -285,6 +289,9 @@ export const useSpace = defineStore("space", () => {
     }
   }
   const recoveries = ref<{ key: string; value: string }[]>([]);
+  /* 待处理面板原来由顶栏那个「查看待处理」开关。顶栏整行去掉之后，
+     入口挪到设置页的「同步状态」，两边共用这一个开关 */
+  const pendingOpen = ref(false);
   function findLegacy() {
     const out = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -354,6 +361,8 @@ export const useSpace = defineStore("space", () => {
     slot,
     other,
     recoveries,
+    pendingOpen,
+    lastSync,
     init,
     login,
     logout,

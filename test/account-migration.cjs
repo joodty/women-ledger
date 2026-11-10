@@ -142,7 +142,10 @@ const base = "http://127.0.0.1:18769";
       await page.locator("input[name=password]").fill(credentials.me.password);
       await page.locator("form button[type=submit]").click();
       await page.locator("[data-act=add]:visible").first().waitFor();
-      await page.getByRole("button", { name: "查看待处理" }).click();
+      /* 顶栏那行拆掉之后，「本机待提交内容」的入口在设置页的「同步状态」那一行。
+         有旧版内容要恢复时那一行才点得开 */
+      await page.goto(base + "/#/settings");
+      await page.getByRole("button", { name: /^同步状态/ }).click();
       await page.getByRole("button", { name: "尝试恢复" }).click();
       const { expect } = require("playwright/test");
       await expect

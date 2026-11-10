@@ -1571,6 +1571,49 @@ svg {
 .list-row:first-child {
   border-top: 0;
 }
+/* ---------------- 设置页：同步状态 ---------------- */
+/* 顶栏那行「已同步 · 刷新」整行拆掉之后，「同步到哪一刻」只剩这一处说。
+   左边是可点开待处理面板的文字块，右边一个按钮，一行里不再放第三样东西 */
+.sync-row {
+  gap: 12px;
+}
+.sync-main {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+}
+/* button 一 disabled 就会被浏览器把字刷成灰，这里只要光标别再变手 */
+.sync-main:disabled {
+  cursor: default;
+}
+/* 有待处理内容时，副说明变成能点的一句话，不然看不出那一行点得开 */
+.sync-main-on .list-d {
+  color: var(--pink-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sync-now {
+  flex: 0 0 auto;
+  min-width: 72px;
+  padding: 7px 11px;
+  border: 1px solid var(--pink-soft-2);
+  border-radius: 15px;
+  background: var(--pink-soft);
+  color: var(--pink-ink);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.2;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+.sync-now:disabled {
+  border-color: transparent;
+  background: var(--gray-soft);
+  color: var(--ink-4);
+}
 .list-ico {
   width: 38px;
   height: 38px;

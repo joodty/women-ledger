@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute } from "vue-router";
 import { useSpace } from "../stores/space";
 import { api, post } from "../lib/api";
@@ -74,6 +74,35 @@ const s = useSpace(),
   }),
   history = ref<{ id: number; revision: number; created_at: string }[]>([]),
   historyPreview = ref("");
+/* 顶栏那行「已同步 · 刷新」整行拆掉之后，「同步到哪一刻了」和「现在推一把」
+   都只剩这一行会说。20 秒跳一次，只是为了让「刚刚」自己变成「3 分钟前」 */
+const now = ref(Date.now());
+let clock: ReturnType<typeof setInterval> | undefined;
+onMounted(() => {
+  clock = setInterval(() => (now.value = Date.now()), 20000);
+});
+onBeforeUnmount(() => clearInterval(clock));
+/* 有待提交、有旧版内容要恢复的时候，这一行才点得开那个面板 */
+const needsHandling = computed(
+  () => s.pending.length + s.recoveries.length > 0,
+);
+const syncHint = computed(() => {
+  if (s.pending.length) return `有 ${s.pending.length} 条内容还没交上去`;
+  if (s.recoveries.length) return "有旧版内容可以恢复";
+  if (s.offline) return "网络不稳，本机内容已保留";
+  if (!s.lastSync) return "还没有连上过";
+  const m = Math.floor((now.value - s.lastSync) / 60000);
+  if (m < 1) return "刚刚同步过";
+  if (m < 60) return `${m} 分钟前同步`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h} 小时前同步` : `${Math.floor(h / 24)} 天前同步`;
+});
+function syncNow() {
+  task.run(async () => {
+    await s.refresh();
+    s.notice = s.offline ? "还是连不上，稍后再试" : "已经是最新的";
+  });
+}
 function openProfile() {
   name.value = s.member(s.slot).name;
   avatar.value = s.member(s.slot).avatar || null;
@@ -348,6 +377,23 @@ function exportDiagnostics() {
         /></RouterLink>
       </div>
       <div class="list-group">
+        <!-- 一行说完：同步到哪一刻，右边按一下就推一次。
+             待提交内容没处理完的时候，左边这块才点得开那个面板 -->
+        <div class="list-row sync-row">
+          <span class="list-ico"><Icon name="sync" :size="19" /></span>
+          <button
+            class="list-main sync-main"
+            :class="{ 'sync-main-on': needsHandling }"
+            :disabled="!needsHandling"
+            @click="s.pendingOpen = true"
+          >
+            <span class="list-k">同步状态</span
+            ><span class="list-d">{{ syncHint }}</span>
+          </button>
+          <button class="sync-now" :disabled="task.busy.value" @click="syncNow">
+            立即同步
+          </button>
+        </div>
         <button class="list-row" @click="section = 'backup'">
           <span class="list-ico"><Icon name="cloud" :size="19" /></span
           ><span class="list-main"
